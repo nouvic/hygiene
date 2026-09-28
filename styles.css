@@ -36,7 +36,7 @@ a { color: inherit; text-underline-offset: .22em; }
   border-bottom: 1px solid var(--line);
 }
 .brand { display: inline-flex; align-items: center; gap: .65rem; font-weight: 800; text-decoration: none; letter-spacing: -.02em; }
-.brand-mark { display: grid; place-items: center; width: 32px; height: 32px; background: var(--ink); color: var(--acid); border-radius: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.brand-mark { display: block; width: 36px; height: 36px; border-radius: 8px; }
 .beta { padding: .16rem .45rem; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 nav { display: flex; align-items: center; gap: 1.65rem; font-size: .86rem; font-weight: 650; }
 nav a { text-decoration: none; }

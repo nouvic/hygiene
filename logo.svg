@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">Hygiene code broom</title>
+  <desc id="description">A small broom sweeping across angled code brackets</desc>
   <rect x="8" y="8" width="112" height="112" rx="25" fill="#171815"/>
   <path d="M42 42 24 64l18 22M86 42l18 22-18 22" fill="none" stroke="#f4f1e8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M82 25 55 76" fill="none" stroke="#d9ff57" stroke-width="10" stroke-linecap="round"/>
