@@ -1,0 +1,71 @@
+{
+  "_comment": "Merge the hooks block into ~/.claude/settings.json, replacing /ABSOLUTE/PATH with wherever you cloned this. Both are optional; the git hooks are the layer that holds regardless of which agent you use.",
+  "_PreToolUse": "blocks governance from reaching a source comment, before the edit lands",
+  "_PreToolUse_rulings": "blocks or holds a tool call covered by an action ruling (never:/ask: lines); matcher is * so no tool can route around it",
+  "_PreToolUse_persistence": "blocks unsolicited memory and conversational residue before it becomes durable project state",
+  "_PostToolUseFailure": "after a failed commit, reinforces the scan-first and no-workaround protocol",
+  "_Stop": "not installed by default: blocking Stop makes Claude generate another response; use install-claude --response-retries only if that tradeoff is wanted",
+  "_style": "Use install-claude --concise --no-dashes to enable pre-prompt guidance and file punctuation checks. Both are off by default.",
+  "autoMemoryEnabled": false,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/prompt-style.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/pretooluse-style.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/pretooluse-hygiene.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/pretooluse-rulings.py"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/pretooluse-persistence.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/ABSOLUTE/PATH/TO/hygiene/claude/posttooluse-commit-failure.py"
+          }
+        ]
+      }
+    ]
+  }
+}

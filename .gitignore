@@ -1,0 +1,8 @@
+# Local session continuity and unpublished working specifications
+CONTEXT.md
+.specs/
+
+# Local operating-system and Python artifacts
+.DS_Store
+__pycache__/
+*.py[cod]

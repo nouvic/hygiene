@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# hygiene — single entry point.
+#
+#   hygiene scan      [path]        read-only report. writes nothing, exits 0
+#   hygiene install   [repo]        copy hooks into a repo, set core.hooksPath
+#   hygiene update    [repo]        same as install; re-runs with current version
+#   hygiene uninstall [repo]        remove hooks, unset core.hooksPath
+#   hygiene rulings   [args…]       manage permanent decisions
+#   hygiene memory    [args…]       quarantine, review, and promote memory
+#   hygiene version                 print version
+#
+# Nothing here updates itself. To get a newer version, pull this repo and re-run
+# `hygiene update` on each project you want moved. That is deliberate — a tool
+# that changes your hooks without being asked is a tool you cannot reason about.
+
+set -uo pipefail
+HOME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+case "${1:-help}" in
+  scan)              shift; exec "$HOME_DIR/bin/scan" "$@" ;;
+  rulings)           shift; exec "$HOME_DIR/bin/rulings" "$@" ;;
+  memory)            shift; exec "$HOME_DIR/bin/memory" "$@" ;;
+  install|update)    shift; exec "$HOME_DIR/install" "$@" ;;
+  uninstall)         shift; exec "$HOME_DIR/uninstall" "$@" ;;
+  version|--version|-v)
+    printf 'hygiene %s\n' "$(cat "$HOME_DIR/VERSION" 2>/dev/null || echo unknown)"
+    ;;
+  help|--help|-h)
+    cat <<'USAGE'
+hygiene — governance hygiene for repos worked on by agents
+
+  hygiene scan      [path]     read-only report. writes nothing, exits 0
+  hygiene install   [repo]     copy hooks into a repo, set core.hooksPath
+                              add --no-dashes to check added text at commit time
+  hygiene update    [repo]     same as install; re-runs with current version
+  hygiene uninstall [repo]     remove hooks, unset core.hooksPath
+  hygiene rulings   [args…]    manage permanent decisions
+  hygiene memory    [args…]    quarantine, review, and promote memory
+  hygiene version              print version
+
+Nothing updates itself. Pull this repo, then re-run `hygiene update` on each
+project you want moved.
+USAGE
+    ;;
+  *)
+    echo "unknown command: $1" >&2
+    echo "try: hygiene help" >&2
+    exit 1 ;;
+esac

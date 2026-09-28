@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # Pinned by SHA: in a repo with no dependencies, CI actions are the only
+      # third-party code, and a tag is a moving target.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: test suite
+        run: ./test/run
+      - name: static invariants
+        run: ./test/invariants
+      - name: self-scan reports clean
+        run: ./bin/scan . | grep -q 'clean\.'

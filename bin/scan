@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+# scan — read-only diagnostic. Reports what an agent reads before it reads your code.
+# Never writes, never fails a build. Exit status is always 0.
+#
+# usage: scan [path]
+
+set -uo pipefail
+
+_hyg_d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HYG_HOME=""
+for _c in "$_hyg_d" "$_hyg_d/.."; do
+  [ -f "$_c/lib/patterns.sh" ] && { HYG_HOME="$(cd "$_c" && pwd)"; break; }
+done
+[ -n "$HYG_HOME" ] || { echo "hygiene: patterns library not found" >&2; exit 0; }
+. "$HYG_HOME/lib/patterns.sh"
+hyg_color
+
+ROOT="$(cd "${1:-.}" 2>/dev/null && pwd)" || { echo "no such path: ${1:-.}" >&2; exit 0; }
+cd "$ROOT" || exit 0
+
+EXTRA="$(hyg_extra_exempt "$ROOT")"
+IN_GIT=0
+git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 && IN_GIT=1
+
+list_files() {
+  if [ "$IN_GIT" = 1 ]; then git -C "$ROOT" ls-files --cached --others --exclude-standard | sort -u
+  else find . -type f | sed 's|^\./||'
+  fi
+}
+
+SRC=""; DOCS=""
+while IFS= read -r f; do
+  [ -f "$f" ] || continue
+  hyg_is_exempt "$f" "$EXTRA" && continue
+  if printf '%s' "$f" | grep -Eq "$HYG_DOC_EXT"; then DOCS="$DOCS$f
+"
+  elif printf '%s' "$f" | grep -Eq "$HYG_SRC_EXT"; then SRC="$SRC$f
+"
+  fi
+done <<EOF
+$(list_files | grep -Ev "$HYG_EXEMPT_PATHS")
+EOF
+
+printf '\n%s%s%s\n' "$HYG_BLD" "  agent hygiene · $ROOT" "$HYG_OFF"
+printf '%s\n\n' "$HYG_DIM  ────────────────────────────────────────────────$HYG_OFF"
+
+# ─────────────────────────────────────────────── 1. comment density
+DENSE=""; TOT_SRC=0; TOT_CMT=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  total=$(wc -l < "$f" 2>/dev/null | tr -d ' '); [ "${total:-0}" -gt 0 ] || continue
+  cmt=$(hyg_comment_lines "$f" | wc -l | tr -d ' ')
+  TOT_SRC=$((TOT_SRC + total)); TOT_CMT=$((TOT_CMT + cmt))
+  [ "$total" -ge 40 ] || continue
+  pct=$(( cmt * 100 / total ))
+  [ "$pct" -ge 15 ] && DENSE="$DENSE$(printf '%3d%%  %5s lines  %s' "$pct" "$total" "$f")
+"
+done <<EOF
+$SRC
+EOF
+
+OVERALL=0; [ "$TOT_SRC" -gt 0 ] && OVERALL=$(( TOT_CMT * 100 / TOT_SRC ))
+printf '  %scomment density%s   %s%% of source is comment  (%s / %s lines)\n' \
+  "$HYG_BLD" "$HYG_OFF" "$OVERALL" "$TOT_CMT" "$TOT_SRC"
+if [ -n "$DENSE" ]; then
+  printf '%s' "$DENSE" | sort -rn | head -8 | while IFS= read -r l; do
+    [ -n "$l" ] && printf '    %s%s%s\n' "$HYG_YEL" "$l" "$HYG_OFF"
+  done
+fi
+echo
+
+# ─────────────────────────────────────────────── 2. governance in comments
+GOV=""; GOV_N=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hits=$(hyg_comment_lines "$f" | hyg_match_governance)
+  [ -n "$hits" ] || continue
+  n=$(printf '%s\n' "$hits" | wc -l | tr -d ' '); GOV_N=$((GOV_N + n))
+  GOV="$GOV$(printf '%s\n' "$hits" | sed "s|^|$f:|")
+"
+done <<EOF
+$SRC
+EOF
+
+if [ "$GOV_N" -gt 0 ]; then
+  printf '  %sgovernance in comments%s   %s%s lines%s — potential rules and rulings in source\n' \
+    "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$GOV_N" "$HYG_OFF"
+  printf '%s' "$GOV" | head -6 | cut -c1-118 | sed 's/^/    /'
+  [ "$GOV_N" -gt 6 ] && printf '    %s… %s more%s\n' "$HYG_DIM" "$((GOV_N - 6))" "$HYG_OFF"
+else
+  printf '  %sgovernance in comments%s   %snone%s\n' "$HYG_BLD" "$HYG_OFF" "$HYG_GRN" "$HYG_OFF"
+fi
+echo
+
+# ─────────────────────────────────────────────── 3. argument residue
+RES_N=0; RES=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hits=$(hyg_comment_lines "$f" | grep -Ei "$HYG_RESIDUE" 2>/dev/null)
+  [ -n "$hits" ] || continue
+  RES_N=$((RES_N + $(printf '%s\n' "$hits" | wc -l | tr -d ' ')))
+  RES="$RES$(printf '%s\n' "$hits" | sed "s|^|$f:|")
+"
+done <<EOF
+$SRC
+EOF
+for d in $DOCS; do
+  [ -f "$d" ] || continue
+  hits=$(grep -nEi "$HYG_RESIDUE" "$d" 2>/dev/null)
+  [ -n "$hits" ] || continue
+  RES_N=$((RES_N + $(printf '%s\n' "$hits" | wc -l | tr -d ' ')))
+  RES="$RES$(printf '%s\n' "$hits" | sed "s|^|$d:|")
+"
+done
+
+if [ "$RES_N" -gt 0 ]; then
+  printf '  %sargument residue%s   %s%s lines%s — records of past disagreements\n' \
+    "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$RES_N" "$HYG_OFF"
+  printf '%s' "$RES" | head -4 | cut -c1-118 | sed 's/^/    /'
+else
+  printf '  %sargument residue%s   %snone%s\n' "$HYG_BLD" "$HYG_OFF" "$HYG_GRN" "$HYG_OFF"
+fi
+echo
+
+# ─────────────────────────────────────────────── 4. phantom authority
+PH=""; PH_N=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  refs=$(hyg_comment_lines "$f" | grep -oE "$HYG_DOCREF" 2>/dev/null | sed -E 's/[^A-Za-z0-9]+$//' | sort -u)
+  for r in $refs; do
+    [ -n "$r" ] || continue
+    [ -e "$r" ] && continue
+    base="$(basename "$r")"
+    if [ "$IN_GIT" = 1 ]; then
+      git -C "$ROOT" ls-files | grep -qi "/$base\$\|^$base\$" && continue
+    else
+      find . -name "$base" -print -quit 2>/dev/null | grep -q . && continue
+    fi
+    PH_N=$((PH_N + 1)); PH="$PH  $f → $r
+"
+  done
+done <<EOF
+$SRC
+EOF
+
+if [ "$PH_N" -gt 0 ]; then
+  printf '  %sphantom authority%s   %s%s references%s — cited documents that do not exist\n' \
+    "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$PH_N" "$HYG_OFF"
+  printf '%s' "$PH" | head -5 | sed 's/^/  /'
+else
+  printf '  %sphantom authority%s   %snone%s\n' "$HYG_BLD" "$HYG_OFF" "$HYG_GRN" "$HYG_OFF"
+fi
+echo
+
+# ─────────────────────────────────────────────── 5. document volume
+MD_N=0; MD_F=0
+for d in $DOCS; do
+  [ -f "$d" ] || continue
+  MD_F=$((MD_F + 1)); MD_N=$((MD_N + $(wc -l < "$d" | tr -d ' ')))
+done
+printf '  %smarkdown%s   %s lines across %s files\n' "$HYG_BLD" "$HYG_OFF" "$MD_N" "$MD_F"
+echo
+
+# ─────────────────────────────────────────────── 6. monotonic growth
+if [ "$IN_GIT" = 1 ]; then
+  GROW=""
+  for d in $DOCS; do
+    stats=$(git -C "$ROOT" log --follow --numstat --format='' -- "$d" 2>/dev/null | awk 'NF==3 {print $1" "$2}')
+    [ -n "$stats" ] || continue
+    revs=$(printf '%s\n' "$stats" | wc -l | tr -d ' ')
+    [ "$revs" -ge 3 ] || continue
+    shrank=$(printf '%s\n' "$stats" | awk '$2>$1 {c++} END{print c+0}')
+    [ "$shrank" = "0" ] && GROW="$GROW    $d  ($revs revisions, never shrank)
+"
+  done
+  if [ -n "$GROW" ]; then
+    printf '  %smonotonic growth%s   %saccreting, not maintained%s\n' \
+      "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$HYG_OFF"
+    printf '%s' "$GROW"
+  else
+    printf '  %smonotonic growth%s   %snone%s\n' "$HYG_BLD" "$HYG_OFF" "$HYG_GRN" "$HYG_OFF"
+  fi
+  echo
+
+  # ───────────────────────────────────────────── 7. history contamination
+  DEL=$(git -C "$ROOT" log --diff-filter=D --name-only --format='' 2>/dev/null \
+        | grep -Ei "$HYG_DOC_EXT" | sort -u)
+  DEL_F=0; DEL_L=0
+  if [ -n "$DEL" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      [ -e "$p" ] && continue
+      sha=$(git -C "$ROOT" rev-list -1 --all -- "$p" 2>/dev/null)
+      [ -n "$sha" ] || continue
+      n=$(git -C "$ROOT" show "$sha^:$p" 2>/dev/null | wc -l | tr -d ' ')
+      [ "${n:-0}" -gt 0 ] || n=$(git -C "$ROOT" show "$sha:$p" 2>/dev/null | wc -l | tr -d ' ')
+      DEL_F=$((DEL_F + 1)); DEL_L=$((DEL_L + ${n:-0}))
+    done <<EOF
+$DEL
+EOF
+  fi
+  if [ "$DEL_F" -gt 0 ]; then
+    printf '  %shistory%s   %s%s lines in %s deleted documents, retrievable in one command%s\n' \
+      "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$DEL_L" "$DEL_F" "$HYG_OFF"
+    printf '    %sthese documents are absent from disk but remain retrievable from Git%s\n' \
+      "$HYG_DIM" "$HYG_OFF"
+  else
+    printf '  %shistory%s   %sclean%s\n' "$HYG_BLD" "$HYG_OFF" "$HYG_GRN" "$HYG_OFF"
+  fi
+  echo
+fi
+
+# ─────────────────────────────────────────────── verdict
+TOTAL=$((GOV_N + RES_N + PH_N))
+printf '%s\n' "$HYG_DIM  ────────────────────────────────────────────────$HYG_OFF"
+if [ "$TOTAL" = 0 ] && [ "$OVERALL" -lt 15 ]; then
+  printf '  %sclean.%s No matches under the current patterns and exemptions.\n\n' "$HYG_GRN" "$HYG_OFF"
+else
+  NOUN="candidate findings"; [ "$TOTAL" = 1 ] && NOUN="candidate finding"
+  printf '  %s%s %s%s across categories; review for false positives and overlap.\n' \
+    "$HYG_BLD" "$TOTAL" "$NOUN" "$HYG_OFF"
+  printf '  %sRun `hygiene install` in this repo to stop more accumulating.%s\n\n' "$HYG_DIM" "$HYG_OFF"
+fi
+exit 0

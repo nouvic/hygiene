@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# uninstall — remove the hooks from a repo.
+#
+#   uninstall [path-to-repo]
+#
+# Leaves .hygieneignore alone (it is yours). Removing this is deliberately as
+# easy as installing it: a tool you cannot get rid of is a tool people do not try.
+
+set -uo pipefail
+TARGET="${1:-.}"
+ROOT="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "error: not a git repository: $TARGET" >&2; exit 1; }
+
+git -C "$ROOT" config --unset core.hooksPath 2>/dev/null || true
+rm -rf "$ROOT/.githooks"
+
+cat <<EOF
+removed from $ROOT
+
+  .githooks/ deleted, core.hooksPath unset.
+  .hygieneignore left in place — delete it yourself if you want it gone.
+
+  if .githooks was committed, record the removal:
+
+    git -C "$ROOT" add -A .githooks
+    git -C "$ROOT" commit -m "build: remove governance hygiene hooks"
+EOF

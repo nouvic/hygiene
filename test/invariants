@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# test/invariants — tripwires for the tool's static security properties.
+#
+#   test/invariants [root]      exit 0 if the tree holds them, 1 if not
+#
+# These are greps, not proofs: a tripwire makes a violation loud in review and
+# in CI, so a hostile change has to visibly break stated policy instead of
+# hiding in a large diff. The behavioural properties (hooks failing open, the
+# scanner writing nothing, the suite's sandbox) are asserted by the test suite;
+# these are the static ones. The [root] argument exists so the suite can prove
+# the tripwire fires on a tampered copy.
+
+set -uo pipefail
+ROOT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+FAIL=0
+
+# Everything that executes on a user's machine — the list a reviewer checks
+# when a change adds a new executable.
+SURFACE="bin/hygiene bin/scan bin/rulings bin/memory install install-claude uninstall
+hooks/pre-commit hooks/commit-msg hooks/check-style lib/patterns.sh
+claude/pretooluse-hygiene.sh claude/pretooluse-rulings.py
+claude/pretooluse-persistence.py claude/posttooluse-commit-failure.py
+claude/stop-rulings.py claude/prompt-style.py claude/pretooluse-style.py"
+
+# ── 1. nothing touches the network ─────────────────────────────────────────
+NET='curl|wget|\bnc\b|ncat|telnet|/dev/tcp|urllib|http\.client|\bsocket\b|requests\.|fetch\('
+for f in $SURFACE; do
+  [ -f "$ROOT/$f" ] || continue
+  hit="$(grep -nE "$NET" "$ROOT/$f" 2>/dev/null || true)"
+  if [ -n "$hit" ]; then
+    printf '  ✗ network primitive in %s\n' "$f"
+    printf '%s\n' "$hit" | head -3 | sed 's/^/      /'
+    FAIL=1
+  fi
+done
+[ "$FAIL" = 0 ] && printf '  ✓ no network primitives in the executable surface\n'
+
+# ── 2. python is stdlib-only, from a named allowlist ───────────────────────
+ALLOWED='difflib|glob|hashlib|importlib|json|os|re|signal|sys|time'
+BAD="$(grep -hoE '^(import|from) [A-Za-z_., ]+' \
+        "$ROOT"/claude/*.py "$ROOT/bin/rulings" "$ROOT/bin/memory" 2>/dev/null \
+      | tr ',' '\n' | sed -E 's/^(import|from) //; s/\..*$//; s/ //g' \
+      | sort -u | grep -vE "^($ALLOWED)$" || true)"
+if [ -n "$BAD" ]; then
+  printf '  ✗ import outside the stdlib allowlist:\n'
+  printf '%s\n' "$BAD" | sed 's/^/      /'
+  FAIL=1
+else
+  printf '  ✓ python imports stay on the stdlib allowlist\n'
+fi
+
+exit "$FAIL"

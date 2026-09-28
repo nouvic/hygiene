@@ -1,0 +1,479 @@
+#!/usr/bin/env python3
+"""Quarantine memory candidates and promote only exact, reviewed content.
+
+Candidates live outside project trees and are never loaded as instructions. An
+approval binds one immutable candidate to one destination, scope, and expiry.
+Promotion is the only command that writes durable project memory.
+"""
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+
+
+HOME = os.path.abspath(os.path.expanduser(os.environ.get(
+    "HYGIENE_MEMORY_HOME", "~/.claude/hygiene/memory-control"
+)))
+KINDS = ("concept", "procedure")
+SCOPES = ("project", "global")
+RESIDUE = re.compile(
+    r"\b(?:the )?(?:user|owner|client)\s+"
+    r"(?:wanted|wants|asked|said|told|preferred|rejected|refused|corrected|"
+    r"decided|agreed|approved|insisted|objected|overruled)\b|"
+    r"\b(?:i|we|the agent|the assistant|claude)\s+"
+    r"(?:argued|refused|pushed back|suggested|proposed|convinced|disagreed|"
+    r"eventually agreed|finally agreed)\b|"
+    r"\b(?:after|during|in)\s+(?:the |this |our )?"
+    r"(?:argument|discussion|conversation|session|debate)\b|"
+    r"\b(?:do not reopen|don't reopen|settled for good)\b",
+    re.I,
+)
+ABSOLUTE_LOCATION = re.compile(r"(?:^|[\s`'(\[])(?:/Users/|/Volumes/|~/|[A-Za-z]:\\)")
+MEMORY_TARGET = re.compile(
+    r"(?:^|/)(?:CLAUDE|AGENTS|MEMORY|MEMORIES|DECISIONS|LESSONS)"
+    r"\.(?:md|txt)$|"
+    r"(?:^|/)(?:\.claude|\.codex|\.agents)/"
+    r"(?:memory|memories|rules|instructions)(?:/|$)",
+    re.I,
+)
+
+
+def fail(message, code=1):
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def canonical(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def digest(value):
+    return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
+
+
+def atomic_json(path, value, mode=0o600):
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    temp = f"{path}.tmp.{os.getpid()}"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(temp, flags, mode)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(value, fh, indent=2, sort_keys=True, ensure_ascii=False)
+            fh.write("\n")
+        try:
+            os.link(temp, path)
+        except FileExistsError:
+            fail("an immutable control record already exists")
+    finally:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            value = json.load(fh)
+    except (OSError, ValueError):
+        fail("the control record is missing or invalid")
+    if not isinstance(value, dict):
+        fail("the control record is invalid")
+    return value
+
+
+def project_root(path=None):
+    current = os.path.realpath(os.path.abspath(path or os.getcwd()))
+    if not os.path.isdir(current):
+        current = os.path.dirname(current)
+    while True:
+        if os.path.exists(os.path.join(current, ".git")):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            fail("run this command inside a project, or pass --project PATH")
+        current = parent
+
+
+def project_key(root):
+    return hashlib.sha256(root.encode("utf-8")).hexdigest()[:24]
+
+
+def parse_options(args, value_options, flags=()):
+    options = {}
+    positional = []
+    i = 0
+    while i < len(args):
+        item = args[i]
+        if item in flags:
+            options[item] = True
+            i += 1
+        elif item in value_options:
+            if i + 1 >= len(args):
+                fail(f"{item} needs a value")
+            options[item] = args[i + 1]
+            i += 2
+        elif item.startswith("--"):
+            fail(f"unknown option: {item}")
+        else:
+            positional.append(item)
+            i += 1
+    return positional, options
+
+
+def context(args):
+    positional, options = parse_options(args, ("--project",))
+    if positional:
+        fail("unexpected argument: " + positional[0])
+    root = project_root(options.get("--project"))
+    return root, project_key(root)
+
+
+def candidate_path(key, candidate_id):
+    return os.path.join(HOME, "candidates", key, candidate_id + ".json")
+
+
+def rejected_path(key, candidate_id):
+    return os.path.join(HOME, "rejected", key, candidate_id)
+
+
+def load_candidate(key, candidate_id):
+    if not re.fullmatch(r"[0-9a-f]{12}", candidate_id):
+        fail("candidate id must be 12 lowercase hexadecimal characters")
+    candidate = read_json(candidate_path(key, candidate_id))
+    if candidate.get("id") != candidate_id or candidate.get("project") != key:
+        fail("candidate identity does not match this project")
+    return candidate
+
+
+def pending(key, candidate_id):
+    if os.path.exists(rejected_path(key, candidate_id)):
+        fail("that candidate was rejected")
+
+
+def validate_candidate(kind, text, evidence, verify, evidence_file):
+    material = "\n".join(x for x in (text, evidence, verify) if x)
+    if not text.strip():
+        fail("candidate text cannot be empty")
+    if RESIDUE.search(material):
+        fail("conversation history, attributed intent, and argument residue cannot become memory")
+    if ABSOLUTE_LOCATION.search(material):
+        fail("memory candidates cannot contain absolute machine locations")
+    if kind == "concept" and not (evidence.strip() and evidence_file):
+        fail("a concept needs --evidence and --evidence-file tied to a project artifact")
+    if kind == "procedure" and not verify.strip():
+        fail("a procedure needs --verify with an observable success check")
+
+
+def propose(args):
+    positional, options = parse_options(
+        args,
+        ("--text", "--evidence", "--evidence-file", "--verify", "--scope", "--expires", "--project"),
+    )
+    if len(positional) != 1 or positional[0] not in KINDS:
+        fail("usage: hygiene memory propose <concept|procedure> --text TEXT [options]")
+    kind = positional[0]
+    scope = options.get("--scope", "project")
+    if scope not in SCOPES:
+        fail("session, task, branch, correction, and history state must remain ephemeral")
+    text = options.get("--text", "").strip()
+    evidence = options.get("--evidence", "").strip()
+    verify = options.get("--verify", "").strip()
+    root = project_root(options.get("--project"))
+    evidence_name = ""
+    evidence_hash = ""
+    if options.get("--evidence-file"):
+        evidence_path = os.path.realpath(os.path.join(root, options["--evidence-file"]))
+        try:
+            inside = os.path.commonpath((root, evidence_path)) == root
+        except ValueError:
+            inside = False
+        if not inside or not os.path.isfile(evidence_path):
+            fail("evidence file must be an existing file inside the current project")
+        evidence_name = os.path.relpath(evidence_path, root)
+        with open(evidence_path, "rb") as fh:
+            evidence_hash = hashlib.sha256(fh.read()).hexdigest()
+    validate_candidate(kind, text, evidence, verify, evidence_name)
+    key = project_key(root)
+    created = time.time_ns()
+    seed = f"{key}\0{created}\0".encode("utf-8") + os.urandom(16)
+    candidate_id = hashlib.sha256(seed).hexdigest()[:12]
+    candidate = {
+        "created": created,
+        "evidence": evidence,
+        "evidence_file": evidence_name,
+        "evidence_hash": evidence_hash,
+        "expires": options.get("--expires", ""),
+        "id": candidate_id,
+        "kind": kind,
+        "project": key,
+        "scope": scope,
+        "text": text,
+        "verify": verify,
+        "version": 1,
+    }
+    atomic_json(candidate_path(key, candidate_id), candidate, 0o400)
+    print(f"candidate {candidate_id} quarantined; it is not active memory")
+
+
+def list_candidates(args):
+    root, key = context(args)
+    del root
+    folder = os.path.join(HOME, "candidates", key)
+    rows = []
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        names = []
+    for name in names:
+        if not name.endswith(".json"):
+            continue
+        candidate_id = name[:-5]
+        if os.path.exists(rejected_path(key, candidate_id)):
+            continue
+        value = read_json(os.path.join(folder, name))
+        summary = " ".join(str(value.get("text", "")).split())
+        rows.append((candidate_id, value.get("kind", "?"), value.get("scope", "?"), summary))
+    if not rows:
+        print("no pending memory candidates for this project")
+        return
+    for candidate_id, kind, scope, summary in rows:
+        print(f"{candidate_id}  {kind:9} {scope:7}  {summary[:72]}")
+
+
+def show(args):
+    positional, options = parse_options(args, ("--project",))
+    if len(positional) != 1:
+        fail("usage: hygiene memory show ID [--project PATH]")
+    root = project_root(options.get("--project"))
+    candidate = load_candidate(project_key(root), positional[0])
+    print(json.dumps(candidate, indent=2, sort_keys=True, ensure_ascii=False))
+
+
+def reject(args):
+    positional, options = parse_options(args, ("--project",))
+    if len(positional) != 1:
+        fail("usage: hygiene memory reject ID [--project PATH]")
+    key = project_key(project_root(options.get("--project")))
+    candidate = load_candidate(key, positional[0])
+    path = rejected_path(key, candidate["id"])
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        fail("that candidate was already rejected")
+    os.close(fd)
+    print(f"candidate {candidate['id']} rejected")
+
+
+def approved_target(root, target, scope):
+    raw = os.path.expanduser(target)
+    if scope == "project" and not os.path.isabs(raw):
+        raw = os.path.join(root, raw)
+    if scope == "global" and not os.path.isabs(raw):
+        fail("global memory destination must be an absolute path or start with ~")
+    expanded = os.path.realpath(os.path.abspath(raw))
+    if scope == "project":
+        try:
+            inside = os.path.commonpath((root, expanded)) == root
+        except ValueError:
+            inside = False
+        if not inside:
+            fail("project memory destination resolves outside the current project")
+        stored = os.path.relpath(expanded, root)
+    else:
+        allowed = os.path.realpath(os.path.expanduser("~/.claude"))
+        try:
+            inside = os.path.commonpath((allowed, expanded)) == allowed
+        except ValueError:
+            inside = False
+        if not inside:
+            fail("global memory destination must be inside ~/.claude")
+        stored = expanded
+    if not MEMORY_TARGET.search(expanded.replace(os.sep, "/")):
+        fail("destination is not a recognized memory or instruction carrier")
+    return stored
+
+
+def approve(args):
+    positional, options = parse_options(
+        args,
+        ("--to", "--scope", "--expires", "--project"),
+        ("--yes",),
+    )
+    if len(positional) != 1 or "--to" not in options:
+        fail("usage: hygiene memory approve ID --to PATH --yes [options]")
+    if not options.get("--yes"):
+        fail("approval was not recorded; inspect the candidate, then repeat with --yes", 3)
+    root = project_root(options.get("--project"))
+    key = project_key(root)
+    candidate = load_candidate(key, positional[0])
+    pending(key, candidate["id"])
+    scope = options.get("--scope", candidate["scope"])
+    if scope not in SCOPES:
+        fail("approval scope must be project or global")
+    target = approved_target(root, options["--to"], scope)
+    if expiry_is_past(options.get("--expires", candidate.get("expires", ""))):
+        fail("approval expiry is already in the past")
+    approval = {
+        "candidate": candidate["id"],
+        "candidate_hash": digest(candidate),
+        "created": time.time_ns(),
+        "expires": options.get("--expires", candidate.get("expires", "")),
+        "project": key,
+        "scope": scope,
+        "target": target,
+        "version": 1,
+    }
+    fingerprint = digest(approval)
+    path = os.path.join(HOME, "approvals", key, f"{candidate['id']}.{fingerprint}.json")
+    atomic_json(path, approval, 0o400)
+    print(f"approved exact candidate and destination\napproval {fingerprint}")
+
+
+def expiry_is_past(value):
+    if not value:
+        return False
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        fail("expiry must use YYYY-MM-DD")
+    try:
+        time.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        fail("expiry is not a valid calendar date")
+    today = time.strftime("%Y-%m-%d", time.localtime())
+    return value < today
+
+
+def render(candidate, approval):
+    title = "Concept" if candidate["kind"] == "concept" else "Procedure"
+    lines = [f"<!-- hygiene-memory:{candidate['id']} -->", f"### {title}", "", candidate["text"]]
+    if candidate.get("evidence"):
+        lines.extend(("", "Evidence: " + candidate["evidence"]))
+    if candidate.get("evidence_file"):
+        lines.append(
+            "Evidence artifact: " + candidate["evidence_file"] +
+            " (sha256 " + candidate["evidence_hash"] + ")"
+        )
+    if candidate.get("verify"):
+        lines.extend(("", "Verify: " + candidate["verify"]))
+    lines.extend(("", "Scope: " + approval["scope"]))
+    if approval.get("expires"):
+        lines.append("Approved before: " + approval["expires"])
+    return "\n".join(lines) + "\n"
+
+
+def atomic_append(path, content):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            existing = fh.read()
+        mode = os.stat(path).st_mode & 0o777
+    except FileNotFoundError:
+        existing, mode = "", 0o600
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    separator = "" if not existing or existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+    temp = f"{path}.tmp.{os.getpid()}"
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(existing + separator + content)
+        os.replace(temp, path)
+    finally:
+        try:
+            os.unlink(temp)
+        except OSError:
+            pass
+
+
+def promote(args):
+    positional, options = parse_options(args, ("--approval", "--project"))
+    if len(positional) != 1 or "--approval" not in options:
+        fail("usage: hygiene memory promote ID --approval HASH [--project PATH]")
+    fingerprint = options["--approval"]
+    if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        fail("approval must be a 64-character lowercase hash")
+    root = project_root(options.get("--project"))
+    key = project_key(root)
+    candidate = load_candidate(key, positional[0])
+    pending(key, candidate["id"])
+    path = os.path.join(HOME, "approvals", key, f"{candidate['id']}.{fingerprint}.json")
+    approval = read_json(path)
+    if digest({k: v for k, v in approval.items()}) != fingerprint:
+        fail("approval fingerprint does not match its exact content")
+    if approval.get("candidate_hash") != digest(candidate):
+        fail("candidate changed after approval")
+    if approval.get("candidate") != candidate["id"] or approval.get("project") != key:
+        fail("approval belongs to a different candidate or project")
+    used = os.path.join(HOME, "used", fingerprint)
+    if os.path.exists(used):
+        fail("approval has already been used")
+    if expiry_is_past(str(approval.get("expires", ""))):
+        fail("approval expired before promotion")
+    if candidate.get("evidence_file"):
+        evidence_path = os.path.realpath(os.path.join(root, candidate["evidence_file"]))
+        try:
+            with open(evidence_path, "rb") as fh:
+                current_hash = hashlib.sha256(fh.read()).hexdigest()
+        except OSError:
+            fail("evidence artifact disappeared before promotion")
+        if current_hash != candidate.get("evidence_hash"):
+            fail("evidence artifact changed; review a new candidate")
+    if approval["scope"] == "project":
+        target = approved_target(root, os.path.join(root, approval["target"]), "project")
+        target = os.path.realpath(os.path.join(root, target))
+    else:
+        target = approved_target(root, approval["target"], "global")
+    marker = f"hygiene-memory:{candidate['id']}"
+    try:
+        with open(target, encoding="utf-8") as fh:
+            existing = fh.read()
+    except OSError:
+        existing = ""
+    if marker not in existing:
+        atomic_append(target, render(candidate, approval))
+    os.makedirs(os.path.dirname(used), mode=0o700, exist_ok=True)
+    fd = os.open(used, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    os.close(fd)
+    print(f"promoted candidate {candidate['id']} with one-time approval {fingerprint[:12]}")
+
+
+def usage():
+    print("""hygiene memory — controlled promotion for durable agent memory
+
+  hygiene memory propose concept   --text TEXT --evidence WHY --evidence-file FILE
+  hygiene memory propose procedure --text TEXT --verify CHECK [options]
+  hygiene memory list|review       [--project PATH]
+  hygiene memory show ID           [--project PATH]
+  hygiene memory reject ID         [--project PATH]
+  hygiene memory approve ID --to PATH --yes [--scope project|global]
+  hygiene memory promote ID --approval HASH
+
+Candidates are quarantined and inactive. Approval binds exact candidate content,
+destination, scope, and expiry. An approval is single-use.""")
+
+
+def main():
+    command = sys.argv[1] if len(sys.argv) > 1 else "help"
+    args = sys.argv[2:]
+    if command == "propose":
+        propose(args)
+    elif command in ("list", "review"):
+        list_candidates(args)
+    elif command == "show":
+        show(args)
+    elif command == "reject":
+        reject(args)
+    elif command == "approve":
+        approve(args)
+    elif command == "promote":
+        promote(args)
+    elif command in ("help", "--help", "-h"):
+        usage()
+    else:
+        fail("unknown memory command: " + command)
+
+
+if __name__ == "__main__":
+    main()

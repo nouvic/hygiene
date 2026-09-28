@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# rulings — manage permanent decisions the agent must never re-open.
+#
+#   rulings                            list them, with mode
+#   rulings add       "<text>" "<re>"  speech check — optional Stop retry
+#   rulings add-never "<text>" "<re>"  action ruling — PreToolUse blocks it
+#   rulings add-ask   "<text>" "<re>"  action ruling — PreToolUse holds it for a yes
+#   rulings rm <n>                     remove line n
+#   rulings test        "<sentence>"   what a sentence trips (speech only)
+#   rulings test-action "<text>"       what an action blob trips, and which mode
+#   rulings stats                      blocks per ruling, from hits.log
+#
+# Intake runs mechanical checks — contradictions between the user's own
+# decisions, and regexes too broad to be filters — and refuses with exit 3,
+# distinct from a usage error. --force records anyway: the file belongs to the
+# user, not to the checks. Removing a ruling is one line — which is the point.
+# Intake does not have to be perfect when the wrong outcome is two seconds to
+# reverse.
+
+set -uo pipefail
+FILE="${HYGIENE_RULINGS:-$HOME/.claude/hygiene/rulings.txt}"
+mkdir -p "$(dirname "$FILE")"
+[ -f "$FILE" ] || cat > "$FILE" <<'EOF'
+# Permanent rulings. Only you revoke these; nothing external can falsify them.
+#
+# Three line types:
+#   <text> :: <regex>            speech — testable; retry enforcement is opt-in
+#   never: <text> :: <regex>     action — PreToolUse blocks the tool call
+#   ask:   <text> :: <regex>     action — PreToolUse holds it until you are asked
+#
+# Never loaded into any context window. Action rulings are checked before a
+# tool call. Speech checks can be tested manually; opt-in Stop enforcement
+# checks after a reply and may visibly cause a second, corrected response.
+#
+# Not for: titles, concepts, storylines, logos, layout, or any content decision.
+# Those land in the artifact and change constantly. Hardening one is how a
+# nav CTA ends up arguing with you the day you change your mind.
+EOF
+
+# The PreToolUse hook doubles as the intake backtester, so the evidence shown
+# at intake is produced by the exact rendering enforced later. First path is a
+# repo checkout, second the installed layout under ~/.claude/hygiene.
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HOOK=""
+for c in "$SELF/../claude/pretooluse-rulings.py" "$SELF/../pretooluse-rulings.py"; do
+  [ -f "$c" ] && { HOOK="$c"; break; }
+done
+
+FORCE=0
+ARGS=()
+for a in "$@"; do
+  if [ "$a" = "--force" ]; then FORCE=1; else ARGS+=("$a"); fi
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
+
+# intake <mode> <text> <regex> — exit 3 on a candidate, nothing recorded.
+# The checks are advisory by design; without python3 they simply do not run.
+intake() {
+  [ "$FORCE" = 1 ] && return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  RULINGS_HOOK="$HOOK" python3 - "$FILE" "$1" "$2" "$3" <<'PY'
+import importlib.util, os, re, signal, sys
+
+# Importing the hook must not scatter __pycache__ through a checkout.
+sys.dont_write_bytecode = True
+
+# A regex that takes this long on the checks or the backtest would take that
+# long on live actions too — surface it as evidence rather than sit on it.
+def _too_slow(signum, frame):
+    print("\n  not recorded:  the regex is too slow to evaluate"
+          " (likely catastrophic backtracking)\n", file=sys.stderr)
+    sys.exit(3)
+
+try:
+    signal.signal(signal.SIGALRM, _too_slow)
+    signal.alarm(5)
+except (ValueError, OSError):
+    pass
+
+path, mode, text, pattern = sys.argv[1:5]
+
+try:
+    rx = re.compile(pattern, re.I)
+except re.error as exc:
+    print(f"  regex does not compile: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+def norm(p):
+    return "".join(p.split()).lower()
+
+def parse(line):
+    m, body = "speech", line
+    low = line.lower()
+    if low.startswith("never:"):
+        m, body = "never", line[6:]
+    elif low.startswith("ask:"):
+        m, body = "ask", line[4:]
+    if "::" not in body:
+        return None
+    t, _, p = body.partition("::")
+    t, p = t.strip(), p.strip()
+    return (m, t, p) if t and p else None
+
+try:
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().splitlines()
+except OSError:
+    lines = []
+
+candidates = []
+for no, raw in enumerate(lines, 1):
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    parsed = parse(line)
+    if not parsed:
+        continue
+    emode, etext, epat = parsed
+    why = []
+    if norm(epat) == norm(pattern):
+        why.append("same regex under a different mode"
+                   if emode != mode else "identical regex")
+    if rx.search(etext):
+        why.append("the new regex matches this ruling's text")
+    try:
+        erx = re.compile(epat, re.I)
+    except re.error:
+        erx = None
+    if erx and erx.search(text):
+        why.append("this ruling's regex matches the new text")
+    if why:
+        candidates.append((no, emode, etext, epat, "; ".join(why)))
+
+breadth, examples = [], []
+if rx.search(""):
+    breadth.append("the regex matches the empty string — it would fire on every action")
+elif mode in ("never", "ask"):
+    hook = os.environ.get("RULINGS_HOOK", "")
+    if hook and os.path.exists(hook):
+        try:
+            spec = importlib.util.spec_from_file_location("hygiene_ptr", hook)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            count, examples = m.backtest(pattern)
+        except Exception:
+            count = 0
+        if count >= 2:
+            breadth.append(f"would have fired {count} times on recent recorded work")
+        else:
+            examples = []
+
+if not candidates and not breadth:
+    sys.exit(0)
+
+prefix = "" if mode == "speech" else mode + ": "
+print(f"\n  not recorded:  {prefix}{text} :: {pattern}\n", file=sys.stderr)
+for no, emode, etext, epat, why in candidates:
+    print(f"  collides with line {no} ({emode}): {etext} :: {epat}", file=sys.stderr)
+    print(f"    {why}", file=sys.stderr)
+for b in breadth:
+    print(f"  breadth: {b}", file=sys.stderr)
+for e in examples:
+    print(f"    e.g. {e}", file=sys.stderr)
+print("\n  a human re-runs with --force; an agent puts it to the user instead.\n",
+      file=sys.stderr)
+sys.exit(3)
+PY
+  rc=$?
+  [ "$rc" = 0 ] || exit "$rc"
+}
+
+# record <mode> <text> <regex>
+record() {
+  intake "$1" "$2" "$3"
+  case "$1" in
+    speech) printf '%s :: %s\n' "$2" "$3" >> "$FILE"
+            printf '\n  recorded → %s\n            matches /%s/\n' "$2" "$3"
+            printf '            test with: rulings test "<sentence>"\n'
+            printf '            live retry enforcement is opt-in and can show two replies\n\n' ;;
+    never)  printf 'never: %s :: %s\n' "$2" "$3" >> "$FILE"
+            printf '\n  recorded → never: %s\n            matches /%s/\n\n' "$2" "$3" ;;
+    ask)    printf 'ask: %s :: %s\n' "$2" "$3" >> "$FILE"
+            printf '\n  recorded → ask: %s\n            matches /%s/\n\n' "$2" "$3" ;;
+  esac
+}
+
+case "${1:-list}" in
+  list|ls|"")
+    printf '\n  %s\n\n' "$FILE"
+    n=0
+    while IFS= read -r line; do
+      n=$((n+1))
+      case "$line" in ''|'#'*) continue ;; esac
+      mode=speech; body="$line"
+      case "$line" in
+        never:*) mode=never; body="${line#never:}" ;;
+        ask:*)   mode=ask;   body="${line#ask:}" ;;
+      esac
+      txt="$(printf '%s' "${body%%::*}" | sed 's/^ *//; s/ *$//')"
+      printf '  %2d  %-7s %s\n' "$n" "$mode" "$txt"
+    done < "$FILE"
+    printf '\n'
+    ;;
+  add)
+    [ $# -ge 3 ] || { echo 'usage: rulings add "<text>" "<regex>"' >&2; exit 1; }
+    record speech "$2" "$3"
+    ;;
+  add-never)
+    [ $# -ge 3 ] || { echo 'usage: rulings add-never "<text>" "<regex>"' >&2; exit 1; }
+    record never "$2" "$3"
+    ;;
+  add-ask)
+    [ $# -ge 3 ] || { echo 'usage: rulings add-ask "<text>" "<regex>"' >&2; exit 1; }
+    record ask "$2" "$3"
+    ;;
+  rm|remove)
+    [ $# -ge 2 ] || { echo 'usage: rulings rm <line-number>' >&2; exit 1; }
+    tmp="$(mktemp)"; awk -v n="$2" 'NR!=n' "$FILE" > "$tmp" && mv "$tmp" "$FILE"
+    echo "  removed line $2"
+    ;;
+  test)
+    [ $# -ge 2 ] || { echo 'usage: rulings test "<sentence>"' >&2; exit 1; }
+    hit=0
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*|never:*|ask:*) continue ;; esac
+      pat="${line#*:: }"; txt="${line%% ::*}"
+      if printf '%s' "$2" | grep -Eqi "$pat"; then
+        printf '  ✗ trips: %s\n' "$txt"; hit=1
+      fi
+    done < "$FILE"
+    [ "$hit" = 0 ] && echo "  ✓ trips nothing"
+    ;;
+  test-action)
+    [ $# -ge 2 ] || { echo 'usage: rulings test-action "<text>"' >&2; exit 1; }
+    command -v python3 >/dev/null 2>&1 || { echo 'python3 required' >&2; exit 1; }
+    python3 - "$FILE" "$2" <<'PY'
+import re, sys
+path, blob = sys.argv[1], sys.argv[2]
+hit = False
+try:
+    lines = open(path, encoding="utf-8").read().splitlines()
+except OSError:
+    lines = []
+for raw in lines:
+    line = raw.strip()
+    low = line.lower()
+    if low.startswith("never:"):
+        mode, body = "never", line[6:]
+    elif low.startswith("ask:"):
+        mode, body = "ask", line[4:]
+    else:
+        continue
+    if "::" not in body:
+        continue
+    t, _, p = body.partition("::")
+    t, p = t.strip(), p.strip()
+    if not (t and p):
+        continue
+    try:
+        rx = re.compile(p, re.I)
+    except re.error:
+        continue
+    if rx.search(blob):
+        print(f"  ✗ {mode}: {t}")
+        hit = True
+if not hit:
+    print("  ✓ trips nothing")
+PY
+    ;;
+  stats)
+    LOG="$(dirname "$FILE")/hits.log"
+    [ -s "$LOG" ] || { echo '  no hits recorded'; exit 0; }
+    awk -F' :: ' '{c[$NF]++} END {for (t in c) printf "  %4d  %s\n", c[t], t}' \
+      "$LOG" | sort -rn
+    ;;
+  *) echo "unknown: $1" >&2; exit 1 ;;
+esac

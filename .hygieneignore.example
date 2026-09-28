@@ -1,0 +1,10 @@
+# Paths where prose legitimately contains imperatives, negations and dates.
+# One extended-regex per line, matched against the repo-relative path.
+#
+# Product copy, legal text, translations and generated output are already
+# exempt by default (content/, locales/, i18n/, legal*, node_modules/, dist/…).
+# Add anything else here rather than loosening the patterns.
+
+# marketing/copy/
+# docs/adr/
+# CHANGELOG.md

@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+# install-claude — wire the optional Claude Code layer.
+#
+#   install-claude [--harden] [--response-retries] [--concise] [--no-dashes]
+#
+# Copies the hook scripts to ~/.claude/hygiene/ and merges the hook entries
+# into ~/.claude/settings.json, preserving everything already there.
+#
+# Copies rather than references this checkout, so moving or renaming this repo
+# does not silently disable your hooks. Re-run after `git pull` to update.
+#
+# Requires python3 (the Claude hooks are Python; the git-level tooling is not).
+
+set -euo pipefail
+HARDEN=0
+RESPONSE_RETRIES=0
+CONCISE=0
+NO_DASHES=0
+for arg in "$@"; do
+  case "$arg" in
+    --harden) HARDEN=1 ;;
+    --response-retries) RESPONSE_RETRIES=1 ;;
+    --concise) CONCISE=1 ;;
+    --no-dashes) NO_DASHES=1 ;;
+    *) echo "usage: install-claude [--harden] [--response-retries] [--concise] [--no-dashes]" >&2; exit 1 ;;
+  esac
+done
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+DEST="$CONFIG_DIR/hygiene"
+SETTINGS="$CONFIG_DIR/settings.json"
+
+command -v python3 >/dev/null 2>&1 || {
+  echo "error: python3 is required for the Claude layer" >&2; exit 1; }
+
+mkdir -p "$DEST/bin" "$DEST/lib"
+cp "$SRC/claude/stop-rulings.py" "$SRC/claude/pretooluse-hygiene.sh" \
+   "$SRC/claude/pretooluse-rulings.py" \
+   "$SRC/claude/pretooluse-persistence.py" \
+   "$SRC/claude/pretooluse-style.py" "$SRC/claude/prompt-style.py" \
+   "$SRC/claude/posttooluse-commit-failure.py" "$DEST/"
+cp "$SRC/lib/patterns.sh" "$DEST/lib/"
+cp "$SRC/bin/hygiene" "$SRC/bin/scan" "$SRC/bin/rulings" \
+   "$SRC/bin/memory" "$DEST/bin/"
+cp "$SRC/VERSION" "$DEST/VERSION"
+chmod +x "$DEST/stop-rulings.py" "$DEST/pretooluse-hygiene.sh" \
+         "$DEST/pretooluse-rulings.py" "$DEST/pretooluse-persistence.py" \
+         "$DEST/pretooluse-style.py" "$DEST/prompt-style.py" \
+         "$DEST/posttooluse-commit-failure.py"
+chmod +x "$DEST/bin/hygiene" "$DEST/bin/scan" "$DEST/bin/rulings" \
+         "$DEST/bin/memory"
+
+python3 - "$SETTINGS" "$DEST" "$HARDEN" "$RESPONSE_RETRIES" "$CONCISE" "$NO_DASHES" <<'PY'
+import json, os, sys
+path, dest = sys.argv[1], sys.argv[2]
+harden, response_retries = sys.argv[3] == "1", sys.argv[4] == "1"
+data = {}
+if os.path.exists(path):
+    with open(path) as fh:
+        try:
+            data = json.load(fh)
+        except ValueError:
+            print(f"error: {path} is not valid JSON; not touching it", file=sys.stderr)
+            raise SystemExit(1)
+
+hooks = data.setdefault("hooks", {})
+# Claude's built-in memory combines autonomous capture with immediate durable
+# publication. Hygiene replaces it with quarantined candidates and review.
+data["autoMemoryEnabled"] = False
+env = data.setdefault("env", {})
+env.setdefault("HYGIENE_RULINGS", f"{dest}/rulings.txt")
+env.setdefault("HYGIENE_MEMORY_HOME", f"{dest}/memory-control")
+if sys.argv[5] == "1":
+    env["HYGIENE_CONCISE"] = "1"
+if sys.argv[6] == "1":
+    env["HYGIENE_NO_DASHES"] = "1"
+
+if harden:
+    def add_unique(items, value):
+        if value not in items:
+            items.append(value)
+
+    sandbox = data.setdefault("sandbox", {})
+    sandbox["enabled"] = True
+    sandbox["failIfUnavailable"] = True
+    sandbox["allowUnsandboxedCommands"] = False
+    filesystem = sandbox.setdefault("filesystem", {})
+    denied = filesystem.setdefault("denyWrite", [])
+    add_unique(denied, path)
+    add_unique(denied, dest)
+    excluded = sandbox.setdefault("excludedCommands", [])
+    add_unique(excluded, f"{dest}/bin/memory *")
+    permissions = data.setdefault("permissions", {})
+    permission_denied = permissions.setdefault("deny", [])
+    add_unique(permission_denied, f"Edit(/{path})")
+    add_unique(permission_denied, f"Edit(/{dest}/**)")
+
+def ensure(event, matcher, command):
+    entries = hooks.setdefault(event, [])
+    for entry in entries:
+        for h in entry.get("hooks", []):
+            if h.get("command", "").endswith(os.path.basename(command)):
+                h["command"] = command          # refresh an existing install
+                if matcher:
+                    entry["matcher"] = matcher
+                return "updated"
+    item = {"hooks": [{"type": "command", "command": command}]}
+    if matcher:
+        item["matcher"] = matcher
+    entries.append(item)
+    return "added"
+
+def remove(event, command):
+    """Remove only this hook command, preserving every unrelated hook."""
+    entries = hooks.get(event, [])
+    kept, removed = [], False
+    wanted = os.path.basename(command)
+    for entry in entries:
+        handlers = []
+        for handler in entry.get("hooks", []):
+            if handler.get("command", "").endswith(wanted):
+                removed = True
+            else:
+                handlers.append(handler)
+        if handlers:
+            updated = dict(entry)
+            updated["hooks"] = handlers
+            kept.append(updated)
+    if kept:
+        hooks[event] = kept
+    else:
+        hooks.pop(event, None)
+    return "removed" if removed else "absent"
+
+a = ensure("PreToolUse", "Write|Edit|MultiEdit", f"{dest}/pretooluse-hygiene.sh")
+if response_retries:
+    b = ensure("Stop", None, f"{dest}/stop-rulings.py")
+else:
+    b = remove("Stop", f"{dest}/stop-rulings.py")
+# Matcher is "*", not "Write|Edit": an action ruling that only covered file
+# writes would be trivially reachable through Bash instead.
+c = ensure("PreToolUse", "*", f"{dest}/pretooluse-rulings.py")
+# Persistence can be attempted through Bash as well as direct file tools.
+d = ensure("PreToolUse", "*", f"{dest}/pretooluse-persistence.py")
+e = ensure("PostToolUseFailure", "Bash", f"{dest}/posttooluse-commit-failure.py")
+f = ensure("UserPromptSubmit", None, f"{dest}/prompt-style.py")
+g = ensure("PreToolUse", "Write|Edit|MultiEdit", f"{dest}/pretooluse-style.py")
+
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as fh:
+    json.dump(data, fh, indent=2)
+    fh.write("\n")
+print(f"  PreToolUse hygiene hook {a}\n  Stop response-retry hook {b}\n"
+      f"  PreToolUse rulings hook {c}\n  PreToolUse persistence hook {d}\n"
+      f"  PostToolUseFailure commit guidance hook {e}")
+print(f"  UserPromptSubmit style guidance {f}; PreToolUse punctuation check {g}")
+print("  Claude auto memory disabled; controlled candidate capture enabled")
+if harden:
+    print("  Bash sandbox hardened around live settings and memory controls")
+if not response_retries:
+    print("  response retries disabled; add --response-retries to opt in")
+PY
+
+cat <<EOF
+
+  installed to $DEST
+  settings   $SETTINGS
+
+  record a ruling — decisions only you can revoke:
+
+    $DEST/bin/hygiene rulings add-never "X is settled, blocked"  "regex"   # what it does
+    $DEST/bin/hygiene rulings add-ask   "X needs my yes first"   "regex"   # unrequested X
+
+  speech checks are available with rulings test. Enforcing them after a reply
+  requires --response-retries and can visibly generate a corrected second reply.
+
+  durable memory is quarantined until an exact candidate is approved:
+
+    $DEST/bin/memory review
+
+  rulings live in $DEST/rulings.txt and are never loaded into a
+  context window. Restart your session for the hooks to take effect.
+
+  --concise adds brief writing guidance before each prompt, without retries.
+  --no-dashes checks new text in direct file edits. Install project hooks with
+  --no-dashes as well to check shell-written content at commit time.
+
+  --harden also enables fail-closed Bash sandboxing, disables its unsandboxed
+  escape hatch, and protects the live settings and broker state from subprocesses.
+
+EOF

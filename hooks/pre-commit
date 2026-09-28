@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# pre-commit — blocks governance from entering source comments.
+#
+# Comments describe what the code does. Rules belong somewhere that can fail.
+# Set HYGIENE_SKIP=1 to bypass for one commit (and know that you did).
+
+set -uo pipefail
+
+_hyg_d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HYG_HOME=""
+for _c in "${HYGIENE_HOME:-}" "$_hyg_d" "$_hyg_d/.."; do
+  [ -n "$_c" ] && [ -f "$_c/lib/patterns.sh" ] && { HYG_HOME="$_c"; break; }
+done
+[ -n "$HYG_HOME" ] || exit 0
+. "$HYG_HOME/lib/patterns.sh"
+hyg_color
+
+[ "${HYGIENE_SKIP:-0}" = "1" ] && {
+  printf '%s  hygiene: skipped by HYGIENE_SKIP%s\n' "$HYG_YEL" "$HYG_OFF" >&2; exit 0; }
+
+ROOT="$(git rev-parse --show-toplevel)"
+EXTRA="$(hyg_extra_exempt "$ROOT")"
+MD_BUDGET="${HYGIENE_MD_BUDGET:-1500}"
+
+STAGED="$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR)"
+[ -n "$STAGED" ] || exit 0
+
+if [ -x "$_hyg_d/check-style" ]; then
+  "$_hyg_d/check-style" || exit 1
+fi
+
+SNAPSHOT="$(mktemp -d)" || exit 1
+trap 'rm -rf "$SNAPSHOT"' EXIT
+
+staged_file() {
+  [ -f "$SNAPSHOT/$1" ] && return 0
+  mkdir -p "$SNAPSHOT/$(dirname "$1")"
+  git show ":$1" > "$SNAPSHOT/$1"
+}
+
+FAIL=0
+report() {   # report <heading> <body> <explanation>
+  FAIL=1
+  printf '\n%s  ✗ %s%s\n\n' "$HYG_RED" "$1" "$HYG_OFF" >&2
+  printf '%s\n' "$2" | sed 's/^/    /' >&2
+  printf '\n%s    %s%s\n' "$HYG_DIM" "$3" "$HYG_OFF" >&2
+}
+
+# ── 1. governance in comments ───────────────────────────────────────────────
+GOV=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hyg_is_exempt "$f" "$EXTRA" && continue
+  printf '%s' "$f" | grep -Eq "$HYG_SRC_EXT" || continue
+  staged_file "$f" || continue
+  hits="$(hyg_comment_lines "$SNAPSHOT/$f" | hyg_match_governance)"
+  [ -n "$hits" ] || continue
+  GOV="$GOV$(printf '%s\n' "$hits" | sed "s|^|$f:|" | cut -c1-110)
+"
+done <<EOF
+$STAGED
+EOF
+
+[ -n "$GOV" ] && report \
+  "governance in a code comment" \
+  "$GOV" \
+  "Comments describe what the code does. A rule needs a check that can fail."
+
+# ── 2. argument residue ─────────────────────────────────────────────────────
+RES=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hyg_is_exempt "$f" "$EXTRA" && continue
+  printf '%s' "$f" | grep -Eq "$HYG_SRC_EXT|$HYG_DOC_EXT" || continue
+  staged_file "$f" || continue
+  if printf '%s' "$f" | grep -Eq "$HYG_SRC_EXT"; then
+    hits="$(hyg_comment_lines "$SNAPSHOT/$f" | grep -Ei "$HYG_RESIDUE" 2>/dev/null)"
+  elif printf '%s' "$f" | grep -Eq "$HYG_DOC_EXT"; then
+    hits="$(grep -nEi "$HYG_RESIDUE" "$SNAPSHOT/$f" 2>/dev/null)"
+  else continue
+  fi
+  [ -n "$hits" ] || continue
+  RES="$RES$(printf '%s\n' "$hits" | sed "s|^|$f:|" | cut -c1-110)
+"
+done <<EOF
+$STAGED
+EOF
+
+[ -n "$RES" ] && report \
+  "a past disagreement is being written down" \
+  "$RES" \
+  "Record the settlement, not the argument. The argument is what re-opens it."
+
+# ── 3. markdown budget ──────────────────────────────────────────────────────
+MD_TOTAL=0
+MD_PREVIOUS=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hyg_is_exempt "$f" "$EXTRA" && continue
+  printf '%s' "$f" | grep -Eq "$HYG_DOC_EXT" || continue
+  MD_TOTAL=$((MD_TOTAL + $(git show ":$f" 2>/dev/null | awk 'END {print NR+0}')))
+done <<EOF
+$(git ls-files)
+EOF
+
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  hyg_is_exempt "$f" "$EXTRA" && continue
+  printf '%s' "$f" | grep -Eq "$HYG_DOC_EXT" || continue
+  MD_PREVIOUS=$((MD_PREVIOUS + $(git show "HEAD:$f" 2>/dev/null | awk 'END {print NR+0}')))
+done <<EOF
+$(git ls-tree -r --name-only HEAD 2>/dev/null)
+EOF
+
+if [ "$MD_TOTAL" -gt "$MD_BUDGET" ] && [ "$MD_TOTAL" -gt "$MD_PREVIOUS" ]; then
+  report "markdown budget exceeded" \
+    "$MD_TOTAL lines of markdown · budget $MD_BUDGET · previous $MD_PREVIOUS" \
+    "Consolidate, or raise HYGIENE_MD_BUDGET deliberately."
+fi
+
+if [ "$FAIL" = 1 ]; then
+  cat >&2 <<EOF
+
+${HYG_RED}  commit blocked${HYG_OFF}
+
+  Do not move, reword, unstage, exempt, or bypass the same material. That
+  changes the route, not the finding.
+
+  Next: run the read-only project scan, then follow the evidence:
+
+    "$ROOT/.githooks/scan" "$ROOT"
+
+  If the finding is real, keep the behavior in code, a test, a check, or a type
+  and remove the narrative rule or history. If it still looks like a
+  false positive, stop and ask the user with the category, path, and line.
+  An agent must not use HYGIENE_SKIP on the user's behalf.
+
+EOF
+  exit 1
+fi
+exit 0

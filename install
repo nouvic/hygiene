@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# install — copy the hooks into a repo so they travel with it.
+#
+#   install [path-to-repo]
+#
+# Idempotent: safe to run repeatedly. Re-running is how you update.
+# Non-interactive: never prompts, so an agent can run it unattended.
+# Never commits anything — it prints the command and leaves the decision to you.
+
+set -euo pipefail
+SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="$(cat "$SRC/VERSION" 2>/dev/null || echo unknown)"
+
+TARGET="."
+NO_DASHES=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-dashes) NO_DASHES=1 ;;
+    --*) echo "unknown option: $arg" >&2; exit 1 ;;
+    *) TARGET="$arg" ;;
+  esac
+done
+[ -d "$TARGET" ] || { echo "error: no such directory: $TARGET" >&2; exit 1; }
+ROOT="$(git -C "$TARGET" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "error: not a git repository: $TARGET" >&2
+  echo "hint: run 'git init' first — the hooks need a repo to attach to" >&2
+  exit 1; }
+
+PREV="$(cat "$ROOT/.githooks/VERSION" 2>/dev/null || true)"
+
+mkdir -p "$ROOT/.githooks/lib"
+cp "$SRC/hooks/pre-commit" "$SRC/hooks/commit-msg" "$SRC/hooks/check-style" "$ROOT/.githooks/"
+cp "$SRC/lib/patterns.sh" "$ROOT/.githooks/lib/"
+cp "$SRC/bin/scan" "$ROOT/.githooks/scan"
+printf '%s\n' "$VERSION" > "$ROOT/.githooks/VERSION"
+chmod +x "$ROOT/.githooks/pre-commit" "$ROOT/.githooks/commit-msg" \
+         "$ROOT/.githooks/scan" "$ROOT/.githooks/check-style"
+if [ "$NO_DASHES" = 1 ]; then
+  touch "$ROOT/.githooks/no-dashes"
+fi
+[ -f "$ROOT/.hygieneignore" ] || cp "$SRC/.hygieneignore.example" "$ROOT/.hygieneignore"
+git -C "$ROOT" config core.hooksPath .githooks
+
+if [ -z "$PREV" ]; then
+  echo "installed $VERSION into $ROOT"
+elif [ "$PREV" = "$VERSION" ]; then
+  echo "already at $VERSION in $ROOT (files refreshed)"
+else
+  echo "updated $PREV -> $VERSION in $ROOT"
+fi
+
+cat <<EOF
+
+  next, commit the hooks so they travel with the repo:
+
+    git -C "$ROOT" add .githooks .hygieneignore
+    git -C "$ROOT" commit -m "build: add governance hygiene hooks"
+
+  that subject is conventional on purpose — commit-msg is now live and will
+  reject anything that is not.
+
+  anyone else cloning this repo runs once (git does not activate hooks on clone):
+
+    git config core.hooksPath .githooks
+
+  verify:
+
+    git -C "$ROOT" config --get core.hooksPath     # -> .githooks
+    cat "$ROOT/.githooks/VERSION"                  # -> $VERSION
+
+  bypass one commit with HYGIENE_SKIP=1. remove entirely with: uninstall $ROOT
+
+EOF

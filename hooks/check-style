@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Check added lines in the index; product copy and translations are included.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[ -f "$HERE/no-dashes" ] || exit 0
+FAIL=0
+EXEMPT='(^|/)(\.git|\.githooks|node_modules|vendor|dist|build|out|target|coverage|\.next|\.venv|__pycache__|\.scribe|test|tests|spec|__tests__|fixtures|testdata)/|\.(test|spec)\.|\.min\.|-lock\.|\.lock$|\.d\.ts$'
+TEXT='\.(md|mdx|markdown|rst|txt|json|html|xml|toml|ts|tsx|js|jsx|mjs|cjs|css|scss|sass|less|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|sql|vue|svelte|astro|ex|exs|lua|dart|scala|clj|hs|ml|r|jl|tf|yml|yaml)$'
+
+while IFS= read -r -d '' status; do
+  IFS= read -r -d '' path || break
+  paths=("$path")
+  if [[ "$status" = R* ]]; then
+    IFS= read -r -d '' path || break
+    paths+=("$path")
+  fi
+  printf '%s' "$path" | grep -Eq "$EXEMPT" && continue
+  printf '%s' "$path" | grep -Eiq "$TEXT" || continue
+  hits="$(git -c core.quotePath=false diff --cached --find-renames --no-ext-diff --no-textconv --unified=0 -- "${paths[@]}" \
+    | awk '/^@@ / {hunk=1; split($3,a,","); line=substr(a[1],2); next} !hunk {next} /^\+/ {print line ":" substr($0,2); line++; next} /^ / {line++}' \
+    | grep -E '—|–' | head -3)"
+  if [ -n "$hits" ]; then
+    printf 'hygiene: em/en dash in added lines of %s\n%s\n' "$path" "$hits" >&2
+    FAIL=1
+  fi
+done < <(git diff --cached --find-renames --name-status --diff-filter=AMR -z)
+
+[ "$FAIL" = 0 ] || printf 'Use a comma, period, colon, or plain hyphen in new text.\n' >&2
+exit "$FAIL"

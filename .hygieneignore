@@ -1,0 +1,10 @@
+# This tool's own pattern definitions necessarily contain the patterns it looks for.
+lib/patterns.sh
+claude/pretooluse-hygiene.sh
+claude/pretooluse-rulings.py
+claude/stop-rulings.py
+bin/rulings
+README.md
+AGENTS.md
+CONTRIBUTING.md
+test/run
