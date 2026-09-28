@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hygiene — Find stale instructions in AI-assisted repos</title>
+  <meta name="description" content="A free, local scanner for stale instructions, argument residue, phantom authority, and growing repository prose. Bash and Git. No API keys, model calls, or telemetry.">
+  <meta name="theme-color" content="#f4f1e8">
+  <meta property="og:title" content="Hygiene — What instructions has your repository accumulated?">
+  <meta property="og:description" content="Find instruction-like residue in AI-assisted repositories. Local, read-only, and open source.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nouvic.github.io/hygiene/">
+  <link rel="canonical" href="https://nouvic.github.io/hygiene/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Hygiene home">
+      <span class="brand-mark" aria-hidden="true">H</span>
+      <span>Hygiene</span>
+      <span class="beta">public beta</span>
+    </a>
+    <nav aria-label="Primary navigation">
+      <a href="#problem">Problem</a>
+      <a href="#signals">Signals</a>
+      <a href="#try-it">Try it</a>
+      <a class="nav-cta" href="https://github.com/nouvic/hygiene">View on GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> Local repository scanner</p>
+        <h1>What instructions has your repository accumulated?</h1>
+        <p class="lede">AI-assisted projects can preserve old rulings, rejected approaches, and missing documents as if they were still current. Hygiene finds the residue so a person can decide what still belongs.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#try-it">Run a read-only scan</a>
+          <a class="button secondary" href="https://github.com/nouvic/hygiene">Explore the source ↗</a>
+        </div>
+        <ul class="trust-row" aria-label="Project properties">
+          <li>No API key</li>
+          <li>No model calls</li>
+          <li>No telemetry</li>
+          <li>MIT licensed</li>
+        </ul>
+      </div>
+
+      <div class="terminal-wrap" aria-label="Example Hygiene scan output">
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span></span><span></span><span></span>
+            <p>hygiene / scan</p>
+          </div>
+          <div class="terminal-body">
+            <p><span class="prompt">$</span> ./bin/hygiene scan ./project</p>
+            <p class="muted">Scanning source comments and repository prose…</p>
+            <div class="finding">
+              <p><span class="line">src/checkout.ts:84</span></p>
+              <p><span class="tag">GOVERNANCE</span> Owner ruling: NEVER change this flow.</p>
+            </div>
+            <div class="finding">
+              <p><span class="line">src/worker.js:31</span></p>
+              <p><span class="tag warn">PHANTOM</span> See OLD-DESIGN.md <span class="muted">(not found)</span></p>
+            </div>
+            <div class="scan-end">
+              <span>2 candidates for human review</span>
+              <span class="ok">read-only ✓</span>
+            </div>
+          </div>
+        </div>
+        <p class="caption">Illustrative output using the repository's documented synthetic examples.</p>
+      </div>
+    </section>
+
+    <section class="problem section" id="problem">
+      <div class="section-label">01 / The problem</div>
+      <div class="problem-grid">
+        <div>
+          <h2>Repositories remember more than code.</h2>
+        </div>
+        <div class="body-copy">
+          <p>Comments and Markdown can carry decisions from a conversation long after the surrounding code changes. A temporary instruction can become apparent policy. A record of disagreement can look like a product requirement. A deleted document can still lend authority to a comment that points to it.</p>
+          <p>Whether an agent reads or follows any of this depends on its tools and task. Hygiene does not claim to observe a model's context or diagnose its behavior. It asks a smaller, testable question: <strong>what instruction-like material is present in this repository?</strong></p>
+        </div>
+      </div>
+      <div class="residue-flow" aria-label="How instruction residue accumulates">
+        <div><span>01</span><strong>A decision is made</strong><p>Useful context enters a comment or document.</p></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div><span>02</span><strong>The project moves on</strong><p>Code changes; the old instruction remains.</p></div>
+        <div class="flow-arrow" aria-hidden="true">→</div>
+        <div><span>03</span><strong>Authority becomes unclear</strong><p>People and tools must guess what still applies.</p></div>
+      </div>
+    </section>
+
+    <section class="signals section" id="signals">
+      <div class="section-heading">
+        <div class="section-label">02 / What it reports</div>
+        <h2>Signals for review.<br>Not verdicts.</h2>
+        <p>Hygiene uses explicit heuristics. A match is a prompt for human review, and a clean report only means there were no matches under the current patterns and exemptions.</p>
+      </div>
+      <div class="signal-grid">
+        <article>
+          <span class="signal-no">01</span>
+          <h3>Governance in comments</h3>
+          <p>Rules, rulings, and instruction-like language embedded in source comments.</p>
+        </article>
+        <article>
+          <span class="signal-no">02</span>
+          <h3>Argument residue</h3>
+          <p>Records of rejection or disagreement that may outlive the discussion that produced them.</p>
+        </article>
+        <article>
+          <span class="signal-no">03</span>
+          <h3>Phantom authority</h3>
+          <p>Comments that cite a document the scanner cannot find in the working tree.</p>
+        </article>
+        <article>
+          <span class="signal-no">04</span>
+          <h3>Prose growth</h3>
+          <p>Comment and Markdown volume, plus documents whose history shows no net-shrinking revision.</p>
+        </article>
+        <article>
+          <span class="signal-no">05</span>
+          <h3>Deleted documents</h3>
+          <p>Repository prose that remains retrievable from Git history after deletion.</p>
+        </article>
+        <article class="principle">
+          <span class="signal-no">Design principle</span>
+          <blockquote>“Precision is the product.”</blockquote>
+          <p>False positives are treated as first-class bugs. Pattern changes require positive and nearby negative tests.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="boundary section">
+      <div class="boundary-card">
+        <div>
+          <div class="section-label">03 / The boundary</div>
+          <h2>Small enough to inspect.</h2>
+        </div>
+        <div class="boundary-list">
+          <div><span>Runs locally</span><p>Your repository contents are not sent to a service.</p></div>
+          <div><span>Bash + Git</span><p>No runtime package installation for the core scanner and hooks.</p></div>
+          <div><span>Read-only first</span><p><code>scan</code> writes nothing and always exits zero.</p></div>
+          <div><span>Hooks are optional</span><p>Install commit checks only after reviewing the scan.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="try section" id="try-it">
+      <div class="try-copy">
+        <div class="section-label">04 / Try it</div>
+        <h2>One scan. Then tell us what happened.</h2>
+        <p>Clone the repository and point Hygiene at a project you use with a coding agent. Useful findings, false positives, and clean scans are all valuable public-beta evidence.</p>
+        <div class="command" role="group" aria-label="Clone and scan commands">
+          <code id="install-command">git clone https://github.com/nouvic/hygiene.git<br>cd hygiene<br>./bin/hygiene scan /path/to/your-project</code>
+          <button type="button" data-copy="git clone https://github.com/nouvic/hygiene.git\ncd hygiene\n./bin/hygiene scan /path/to/your-project">Copy</button>
+        </div>
+        <p class="fine-print">The scan is informational. It does not change hooks, agent settings, or project files.</p>
+      </div>
+      <aside class="feedback-card">
+        <p class="eyebrow"><span></span> Help test the premise</p>
+        <h3>Your private repo can stay private.</h3>
+        <p>An anonymized line, its file extension, and whether the finding was useful are enough. Please do not publish proprietary source.</p>
+        <a href="https://github.com/nouvic/hygiene/issues/new?template=scan-feedback.md">Share scan feedback ↗</a>
+        <a href="https://github.com/nouvic/hygiene/issues/new?template=feature-request.md">Request a feature ↗</a>
+      </aside>
+    </section>
+
+    <section class="evidence section">
+      <div class="section-label">05 / Evidence and limits</div>
+      <div class="evidence-grid">
+        <h2>The broader problem has evidence. This tool still needs trials.</h2>
+        <div>
+          <p>A public Claude Code report describes feedback accumulating without expiry. An ETH Zurich study found no task-success improvement and over 20% higher inference cost from context files in its evaluated settings.</p>
+          <p>Neither source proves Hygiene is effective, or that this specific residue is widespread. That is why this is a public beta and why clean scans matter as much as findings.</p>
+          <div class="source-links">
+            <a href="https://github.com/anthropics/claude-code/issues/34776">Claude Code report ↗</a>
+            <a href="https://www.sri.inf.ethz.ch/publications/gloaguen2026agentsmd">ETH Zurich study ↗</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing section">
+      <p class="eyebrow"><span></span> Free and open source</p>
+      <h2>Make the repository explain<br>what still belongs.</h2>
+      <div class="hero-actions">
+        <a class="button primary" href="https://github.com/nouvic/hygiene">View Hygiene on GitHub ↗</a>
+        <a class="button secondary" href="https://github.com/nouvic/hygiene/blob/main/CONTRIBUTING.md">Contribute ↗</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">H</span><span>Hygiene</span></a>
+    <p>Built in public by <a href="https://github.com/nouvic">Vicky Durel</a>.</p>
+    <p><a href="https://github.com/nouvic/hygiene/blob/main/LICENSE">MIT License</a></p>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>
