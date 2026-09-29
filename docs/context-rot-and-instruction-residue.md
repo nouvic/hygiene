@@ -15,6 +15,24 @@ referring to deleted architecture, it is tempting to call the whole problem
 | Instruction residue | Rule-like or decision-like repository text remains after its original context changes or disappears | Yes. This is Hygiene's primary inspection target |
 | Phantom authority | A source comment cites a document that the scanner cannot find in the working tree | Yes, within the scanner's documented file and pattern coverage |
 
+## Why context bloat costs more tokens
+
+This part is not speculative. Model providers meter and price input tokens.
+[Anthropic documents input-token pricing and higher rates for long-context
+requests](https://docs.anthropic.com/en/docs/about-claude/pricing), and
+[OpenAI prices model input per token](https://platform.openai.com/pricing).
+More material included in a request means more input tokens processed, subject to
+provider-specific caching and pricing rules.
+
+A 2026 ETH Zurich study, [Evaluating AGENTS.md: Are Repository-Level Context Files
+Helpful for Coding Agents?](https://arxiv.org/abs/2602.11988), found over 20% higher
+inference cost from context files in its evaluated settings. That result is direct
+evidence for those experiments, not a universal savings estimate for Hygiene.
+
+Hygiene reports repository prose volume and residue candidates. It does not yet
+measure which material a particular agent loaded or calculate tokens saved after
+cleanup.
+
 ## Symptoms that justify a repository scan
 
 Run a scan when Claude Code, Cursor, Codex, Copilot, or another coding agent:

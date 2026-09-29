@@ -68,6 +68,13 @@ found no improvement in task success and over 20% higher inference cost from
 context files in its evaluated settings. Those observations support further
 testing; they do not establish the effect size across every repository or agent.
 
+The cost mechanism itself is established: model providers charge for input tokens,
+and longer relevant context means more input tokens to process. [Anthropic's pricing
+documentation](https://docs.anthropic.com/en/docs/about-claude/pricing) defines
+input-token and premium long-context rates, while [OpenAI's pricing](https://platform.openai.com/pricing)
+also prices input by token. What Hygiene still needs to measure is how much scanned
+residue actually enters each agent's context and how much a cleanup removes.
+
 ## What the scan reports
 
 | Signal | Meaning |
