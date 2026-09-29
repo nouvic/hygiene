@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# exposure — read-only diagnostic. For one named agent tool, reports the
+# documented loading surface of every file that holds a finding: whether the
+# tool documents reading it, whether the repository scopes it, whether a loaded
+# file names it, or whether nothing here can say.
+#
+#   exposure --tool TOOL [path]             text report on stdout
+#   exposure --tool TOOL --format json      structured report on stdout
+#
+# Never writes. Exit status is 0 for any report that ran; 2 for a usage error.
+# A tool is required rather than defaulted, because the tools document different
+# surfaces and a default would invent an answer for the ones it did not choose.
+
+set -uo pipefail
+
+_hyg_d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HYG_HOME=""
+for _c in "$_hyg_d" "$_hyg_d/.."; do
+  [ -f "$_c/lib/patterns.sh" ] && { HYG_HOME="$(cd "$_c" && pwd)"; break; }
+done
+[ -n "$HYG_HOME" ] || { echo "hygiene: patterns library not found" >&2; exit 0; }
+. "$HYG_HOME/lib/patterns.sh"
+. "$HYG_HOME/lib/rules.sh"
+. "$HYG_HOME/lib/findings.sh"
+. "$HYG_HOME/lib/report.sh"
+. "$HYG_HOME/lib/exposure.sh"
+hyg_color
+HYG_VERSION="$(cat "$HYG_HOME/VERSION" 2>/dev/null || echo unknown)"
+
+usage() {
+  printf 'usage: exposure --tool TOOL [options] [path]\n\n'
+  printf '  --tool TOOL             the agent tool whose documented loading\n'
+  printf '                          surfaces are modelled. required, one of:\n'
+  printf '%s\n' "$HYG_EXPOSURE_TOOLS" | sed 's/^/                            /'
+  printf '  --format text|json      output format. text is the default\n'
+  printf '  -h, --help              this text\n\n'
+  printf 'Reports the stored finding, the surface its file sits on, and whether the\n'
+  printf 'tool documents loading it. It never reports that an agent read anything:\n'
+  printf 'a scanner sees a repository and cannot see a context.\n'
+}
+
+FORMAT=text; TOOL=""; ARG_ROOT="."; ROOT_SET=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --tool)      TOOL="${2:-}"; shift 2 ;;
+    --tool=*)    TOOL="${1#*=}"; shift ;;
+    --format)    FORMAT="${2:-}"; shift 2 ;;
+    --format=*)  FORMAT="${1#*=}"; shift ;;
+    -h|--help)   usage; exit 0 ;;
+    -*)          printf 'exposure: unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    *)           if [ "$ROOT_SET" = 1 ]; then
+                   printf 'exposure: unexpected argument: %s\n' "$1" >&2; exit 2
+                 fi
+                 ARG_ROOT="$1"; ROOT_SET=1; shift ;;
+  esac
+done
+
+if [ -z "$TOOL" ]; then
+  printf 'exposure: --tool is required\n' >&2; usage >&2; exit 2
+fi
+if ! hyg_exposure_tool_known "$TOOL"; then
+  printf 'exposure: unknown tool: %s\n' "$TOOL" >&2
+  printf 'exposure: known tools: %s\n' "$(printf '%s' "$HYG_EXPOSURE_TOOLS" | tr '\n' ' ')" >&2
+  exit 2
+fi
+
+case "$FORMAT" in
+  text|json) ;;
+  *) printf 'exposure: --format must be text or json, not %s\n' "${FORMAT:-}" >&2; exit 2 ;;
+esac
+
+ROOT="$(cd "$ARG_ROOT" 2>/dev/null && pwd)" || { printf 'exposure: no such path: %s\n' "$ARG_ROOT" >&2; exit 2; }
+cd "$ROOT" || exit 2
+HYG_TABLE_CACHE=""
+
+FINDINGS="$(hyg_findings "$ROOT")"
+if hyg_in_git "$ROOT"; then
+  HIST="$(hyg_findings_history "$ROOT")"
+  [ -n "$HIST" ] && FINDINGS="$FINDINGS$HIST
+"
+fi
+
+REFERENCED=""
+if [ "$TOOL" = claude-code ]; then
+  REFERENCED="$(hyg_import_closure "$ROOT")"
+fi
+
+# The surface map is built once, before anything reads it, so that the file
+# list and the findings cannot disagree about where a file sits.
+SURFACES="$(hyg_exposure_surfaces "$ROOT" "$TOOL" "$REFERENCED")"
+ROWS="$(printf '%s\n' "$FINDINGS" | hyg_rows | hyg_exposure_rows "$SURFACES")"
+
+if [ "$FORMAT" = json ]; then
+  hyg_render_exposure_json "$ARG_ROOT" "$TOOL" "$SURFACES" <<EOF
+$ROWS
+EOF
+  exit 0
+fi
+
+hyg_render_exposure_text "$ROOT" "$TOOL" "$SURFACES" "$ROWS"
+exit 0

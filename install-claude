@@ -40,16 +40,17 @@ cp "$SRC/claude/stop-rulings.py" "$SRC/claude/pretooluse-hygiene.sh" \
    "$SRC/claude/pretooluse-style.py" "$SRC/claude/prompt-style.py" \
    "$SRC/claude/posttooluse-commit-failure.py" "$DEST/"
 cp "$SRC/lib/patterns.sh" "$SRC/lib/rules.sh" "$SRC/lib/findings.sh" \
-   "$SRC/lib/report.sh" "$DEST/lib/"
+   "$SRC/lib/report.sh" "$SRC/lib/exposure.sh" \
+   "$SRC/lib/exposure-surfaces.tsv" "$SRC/lib/exposure-limits.tsv" "$DEST/lib/"
 cp "$SRC/bin/hygiene" "$SRC/bin/scan" "$SRC/bin/rulings" \
-   "$SRC/bin/memory" "$SRC/bin/explain" "$DEST/bin/"
+   "$SRC/bin/memory" "$SRC/bin/explain" "$SRC/bin/exposure" "$DEST/bin/"
 cp "$SRC/VERSION" "$DEST/VERSION"
 chmod +x "$DEST/stop-rulings.py" "$DEST/pretooluse-hygiene.sh" \
          "$DEST/pretooluse-rulings.py" "$DEST/pretooluse-persistence.py" \
          "$DEST/pretooluse-style.py" "$DEST/prompt-style.py" \
          "$DEST/posttooluse-commit-failure.py"
 chmod +x "$DEST/bin/hygiene" "$DEST/bin/scan" "$DEST/bin/rulings" \
-         "$DEST/bin/memory"
+         "$DEST/bin/memory" "$DEST/bin/exposure"
 
 python3 - "$SETTINGS" "$DEST" "$HARDEN" "$RESPONSE_RETRIES" "$CONCISE" "$NO_DASHES" <<'PY'
 import json, os, sys
