@@ -8,6 +8,7 @@
 #   scan --format json|sarif [path]  structured report on stdout
 #   scan --write-baseline [path]     record the current findings as a baseline
 #   scan --new --baseline [path]     report only findings the baseline does not hold
+#   scan --strict [path]             exit 1 when the report holds a warning finding
 
 set -uo pipefail
 
@@ -34,16 +35,23 @@ usage: scan [options] [path]
                                    (default: <path>/.hygiene-baseline)
   --new                            report only findings not in the baseline
   --baseline[=path]                the baseline to compare against
+  --strict                         exit 1 when the report holds a warning finding
   -h, --help                       this text
 
 A relative --baseline path resolves against the scanned path, the same way
 .hygieneignore does. --new without an existing baseline is an error, not an
 empty baseline: an unreadable baseline must not report every finding as new.
+
+The scan exits 0 for any report and 2 for a usage error. --strict is the one
+exception: it exits 1 when the report holds a warning-severity finding, which
+is what a build gate needs. Informational findings are reported and do not fail
+the run, because the severity that says a finding is a size signal rather than a
+defect is the same severity here.
 USAGE
 }
 
 FORMAT=text; ARG_ROOT="."; ROOT_SET=0
-NEW_ONLY=0; WRITE_BASELINE=0; BASELINE=""
+NEW_ONLY=0; WRITE_BASELINE=0; BASELINE=""; STRICT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -54,6 +62,7 @@ while [ $# -gt 0 ]; do
     --baseline)       BASELINE="${2:-}"; shift 2 ;;
     --baseline=*)     BASELINE="${1#*=}"; shift ;;
     --new)            NEW_ONLY=1; shift ;;
+    --strict)         STRICT=1; shift ;;
     -h|--help)        usage; exit 0 ;;
     -*)               printf 'scan: unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
     *)                if [ "$ROOT_SET" = 1 ]; then
@@ -142,6 +151,23 @@ EOF
   printf 'scan: wrote %s findings to %s\n' "$N_ROWS" "$BASELINE_PATH" >&2
 fi
 
+# ------------------------------------------------------------------- strict
+# Counted from the rows the report is built from, after any baseline filtering,
+# so the exit status and the report cannot disagree about what was found. The
+# loop reads a here-document rather than a pipe, so the counter survives it.
+STRICT_N=0
+if [ "$STRICT" = 1 ]; then
+  while IFS="$US" read -r rule catg sev file line match fp ev; do
+    [ -n "$rule" ] || continue
+    [ "$sev" = warning ] && STRICT_N=$((STRICT_N + 1))
+  done <<EOF
+$ROWS
+EOF
+  if [ "$STRICT_N" -gt 0 ]; then
+    printf 'scan: %s warning findings; --strict fails this run\n' "$STRICT_N" >&2
+  fi
+fi
+
 # The findings of one rule, as four fields: file, line, narrow match, whole
 # evidence line. The fields are joined with a unit separator rather than a tab
 # because a tab is IFS whitespace, and splitting on it silently collapses the
@@ -169,6 +195,7 @@ $ROWS
 EOF
            ;;
   esac
+  [ "$STRICT" = 1 ] && [ "$STRICT_N" -gt 0 ] && exit 1
   exit 0
 fi
 
@@ -333,4 +360,8 @@ else
     "$HYG_BLD" "$TOTAL" "$NOUN" "$HYG_OFF"
   printf '  %sRun `hygiene install` in this repo to stop more accumulating.%s\n\n' "$HYG_DIM" "$HYG_OFF"
 fi
+
+# The exit status is the last thing the scan decides. Without --strict it is 0
+# for every report, which is the contract callers depend on.
+[ "$STRICT" = 1 ] && [ "$STRICT_N" -gt 0 ] && exit 1
 exit 0

@@ -1,0 +1,39 @@
+name: hygiene
+
+# The action in this repository, run on this repository. It is the same file a
+# consuming project uses, so a change that breaks the action fails here rather
+# than in someone else's CI.
+#
+# A project installing it writes `uses: nouvic/hygiene@<tag>` instead of `./`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: scan (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # History residue is read from git history, so a shallow clone hides
+          # part of what the scan reports.
+          fetch-depth: 0
+      - name: Scan
+        uses: ./
+        with:
+          path: .
+          format: text
+          # Warnings fail this job; informational findings do not. Running the
+          # gate on this repository is the cheapest way to know it works.
+          strict: 'true'

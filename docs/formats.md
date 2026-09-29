@@ -14,9 +14,12 @@ Two properties hold for both structured formats.
 progress notes and baseline messages go to stderr. A consumer can pipe stdout
 straight into a parser.
 
-**Exit status stays 0.** A finding is not a failure. The only non-zero exits
-are usage errors, which is why `--format` rejects an unknown value with status
-2 rather than falling back to text.
+**Exit status stays 0.** A finding is not a failure. `--format` rejects an
+unknown value with status 2 rather than falling back to text. The one flag that
+changes the exit status is `--strict`, which is a separate decision about
+gating a build: it exits 1 when the report holds a warning-severity finding, in
+either format, and the document is written either way. See [Continuous
+integration](ci.md).
 
 ## JSON
 
@@ -25,7 +28,7 @@ One object, one schema version.
 ```json
 {
   "schemaVersion": 1,
-  "tool": { "name": "hygiene", "version": "0.4.0" },
+  "tool": { "name": "hygiene", "version": "0.1.1" },
   "root": ".",
   "summary": { "findings": 2, "warning": 1, "info": 1 },
   "findings": [ ... ]

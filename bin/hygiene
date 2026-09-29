@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hygiene — single entry point.
 #
-#   hygiene scan      [path]        read-only report. writes nothing, exits 0
+#   hygiene scan      [path]        read-only report. writes nothing
 #   hygiene exposure  --tool TOOL   which documented loading surface a finding sits on
 #   hygiene explain   [RULE_ID]     what a rule means, and what it does not claim
 #   hygiene install   [repo]        copy hooks into a repo, set core.hooksPath
@@ -33,7 +33,8 @@ case "${1:-help}" in
     cat <<'USAGE'
 hygiene — governance hygiene for repos worked on by agents
 
-  hygiene scan      [path]     read-only report. writes nothing, exits 0
+  hygiene scan      [path]     read-only report. writes nothing
+                              --strict exits 1 on a warning finding
   hygiene exposure  --tool T   which documented loading surface a finding sits on
   hygiene explain   [RULE_ID]  what a rule means, and what it does not claim
   hygiene install   [repo]     copy hooks into a repo, set core.hooksPath
