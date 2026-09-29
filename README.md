@@ -8,6 +8,28 @@ Optional Git hooks help keep new residue out of commits.
 
 Bash and Git. No API key, model calls, telemetry, or package installation.
 
+## Is your coding agent getting sloppy or following old instructions?
+
+Developers often describe the symptom before they know the cause:
+
+- Claude Code or another coding agent appears to ignore `CLAUDE.md` or `AGENTS.md`.
+- Cursor, Copilot, Codex, or another agent repeats an approach the team already rejected.
+- An agent refers to deleted architecture documents or decisions that no longer apply.
+- Repository instructions have grown into noisy, conflicting, or stale context.
+- A long-running project feels affected by context bloat, context drift, or context rot.
+
+Hygiene came from a real project where accumulated repository residue created
+friction, context bloat, and unintended governance for later AI-assisted work.
+Reviewing and cleaning that residue improved the workflow. The scanner tests for
+the same stored conditions in another repository. When an agent loads governance
+comments or stale repository prose, that material becomes input context: it
+consumes tokens, contradictory statements create conflicting context, and
+prescriptive comments can become unintended governance. What varies is which
+material an agent loads and how strongly it affects a particular task.
+
+See [Context rot, context bloat, and instruction residue](docs/context-rot-and-instruction-residue.md)
+for the distinction and a practical diagnostic sequence.
+
 ## Try a read-only scan
 
 Download or clone this repository, open its directory, then run:
@@ -40,12 +62,21 @@ Source comments, documentation, and retrievable Git history can carry stale
 context. Whether an agent reads or follows that material depends on its tools and
 the task. Hygiene does not observe the model's context or diagnose its behavior.
 
-There is evidence for the broader problem. A [Claude Code memory-governance
+The project that produced Hygiene is the first case observation: accumulated
+residue made later AI-assisted work harder to steer, and cleaning it reduced that
+friction. There is also evidence for the broader problem. A [Claude Code memory-governance
 report](https://github.com/anthropics/claude-code/issues/34776) describes feedback
 accumulating without expiry. An [ETH Zurich study](https://www.sri.inf.ethz.ch/publications/gloaguen2026agentsmd)
 found no improvement in task success and over 20% higher inference cost from
-context files in its evaluated settings. Neither establishes Hygiene's effectiveness;
-that is what early real-world trials can help assess.
+context files in its evaluated settings. Those observations support further
+testing; they do not establish the effect size across every repository or agent.
+
+The cost mechanism itself is established: model providers charge for input tokens,
+and longer relevant context means more input tokens to process. [Anthropic's pricing
+documentation](https://docs.anthropic.com/en/docs/about-claude/pricing) defines
+input-token and premium long-context rates, while [OpenAI's pricing](https://platform.openai.com/pricing)
+also prices input by token. What Hygiene still needs to measure is how much scanned
+residue actually enters each agent's context and how much a cleanup removes.
 
 ## What the scan reports
 
@@ -110,6 +141,15 @@ and hooks. [ctxlint](https://github.com/YawLabs/ctxlint) checks context against 
 codebase and also audits session and memory data. There is real overlap.
 Hygiene focuses on instruction-like residue in source comments and repository
 prose, with a small Bash/Git scan-and-hook workflow.
+
+| Tool | Primary scope | Runtime |
+|---|---|---|
+| Hygiene | Instruction-like comments, repository prose, missing document references, and Git-history residue | Bash and Git |
+| agnix | Agent configuration, skills, and hook validation | See the agnix project |
+| ctxlint | Context-to-code consistency plus session and memory auditing | See the ctxlint project |
+
+This comparison describes scope, not superiority. Features change, so follow the
+linked projects for their current capabilities.
 
 <details>
 <summary>Optional Claude Code features: rulings, memory review, and style checks</summary>
