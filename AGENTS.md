@@ -1,3 +1,30 @@
+# AGENTS.md
+
+## Which of these two jobs is yours
+
+**Two different jobs bring an agent to this file. Decide which one is yours
+before you follow anything below.**
+
+**A. Install Hygiene into another repository.** You were asked to add Hygiene to
+a project that is not this one. Continue to the installation instructions below
+and follow them exactly.
+
+**B. Work on Hygiene itself.** You are contributing to, fixing, or maintaining
+this repository. This is a different job with different instructions.
+
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) first. It is short, and it is the
+  contribution guide.
+- Run `./test/run` and `./test/invariants`. That is what CI runs.
+- **Do not install Hygiene into this repository as part of a development
+  task.** This repository is the tool, not a project that consumes it, and no
+  change here should add, refresh, or re-commit `.githooks/`. The hooks that
+  check contributions are a maintainer's local setup, described under House
+  style in CONTRIBUTING.md, and they are not a change to commit.
+- The installation instructions below are written for other people's projects.
+  Do not follow them against this checkout.
+
+---
+
 # Installing this — instructions for an agent
 
 You have been asked to install `hygiene` into a project. Follow these exactly.

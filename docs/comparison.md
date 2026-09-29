@@ -32,7 +32,7 @@ capabilities pages change; follow the projects for their current state.
 | Runtime | Bash, Git, standard Unix utilities | Node, single self-contained bundle | Rust binary, also published to npm, Homebrew, pip, and Cargo |
 | Network, keys, model | None; the scan is local and deterministic | No API key or model documented; `npx` fetches the package | No network, API key, or model documented for the linter |
 | Writes | Never to the scanned tree; only a baseline or report you name | Reporting by default; `--fix`, `init`, and the `ctxlint_fix` MCP tool write | Reporting by default; `--fix`, `--fix-safe`, `--fix-unsafe` write |
-| Report formats | text, JSON, SARIF | text, JSON, SARIF | includes `--format github` |
+| Report formats | text, JSON, SARIF | text, JSON, SARIF | terminal, GitHub annotations, SARIF |
 | Strict mode | `--strict` exits 1 on a warning finding | `--strict`; non-strict always exits 0 | `--strict` |
 | Editor and CI integration | GitHub Action, Git hooks | GitHub Action, pre-commit, MCP server, seven MCP tools | GitHub Action, VS Code, JetBrains, Neovim, Zed, web playground |
 
@@ -41,6 +41,61 @@ not its safety: all three report by default, and the two that can rewrite files
 do so only when asked. "Rule set" is a count, and counts are not comparable
 across tools with different granularity, one of agnix's rules and one of
 Hygiene's rules are not the same size of claim.
+
+## Capability comparison
+
+One row per capability, one support level per tool. Every ctxlint and agnix cell
+is read from that project's public documentation, retrieved on 2026-09-29:
+[ctxlint](https://github.com/YawLabs/ctxlint),
+[agnix](https://github.com/agent-sh/agnix). Nothing in this table is a
+measurement, and no project was installed or run to write it.
+
+| Capability | Hygiene | ctxlint | agnix |
+| --- | --- | --- | --- |
+| Primary object inspected | Instruction-like residue in a repository: source comments, repository prose, Git history | Agent context files, MCP configs, sessions, memory, and skills, against the codebase | Agent configuration files, against published specs and known breakage patterns |
+| Instruction-like text in source comments | Supported (`HYG-GOV-001`, `HYG-ARG-001`, `HYG-PHA-001`) | Not currently supported | Not currently supported |
+| General repository prose | Supported (`HYG-ARG-002`, `HYG-VOL-001`) | Partial (the context files it lints are Markdown; repository prose in general is not its object) | Partial (agent instruction files such as `CLAUDE.md` and `SKILL.md` are Markdown; other prose is not its object) |
+| Explicit agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`) | Partial (read as prose for argument residue, and modelled by loading surface in `hygiene exposure`; no validity check) | Supported | Supported |
+| Git history | Partial (reports prose deleted from the tree that remains retrievable; no path repair) | Partial (documents Git history for `--fix` path repair and rename detection) | Not currently supported |
+| Agent configuration schemas: hooks, MCP configs, frontmatter | Outside scope | Supported (MCP configs, frontmatter) | Supported (hooks, MCP configs, per-tool config files) |
+| Session data | Outside scope | Supported (reading sessions is opt-in because it leaves the project tree) | Not currently supported |
+| Memory data | Partial (gating lives in the optional Claude layer, not in the scan) | Supported (staleness, duplication, caps) | Partial (validates Claude memory and instruction files with `CC-MEM-*` rules; no session or autonomous memory-store audit is documented) |
+| Deterministic and offline operation | Supported (Bash and Git; `./test/invariants` fails the build if a network primitive enters the executable surface) | Partial (no model call or network access documented for the checks; no determinism statement published, and `npx` fetches the package) | Partial (no model call or network access documented for the linter; no determinism statement published) |
+| Runs with no runtime beyond the OS, Bash, and Git | Supported | Not currently supported (Node) | Not currently supported (a Rust binary, with npm, Homebrew, pip, Cargo, and prebuilt distributions) |
+| Emits a structured document | Supported (JSON, SARIF) | Supported (JSON, SARIF) | Partial (SARIF is supported; JSON output is not documented in the retrieved sources) |
+| Rewrites files (autofix) | Not currently supported (a comment is a human judgement, so nothing is rewritten) | Supported (`--fix`, `--fix-dry-run`) | Supported (`--fix`, `--fix-safe`, `--fix-unsafe`) |
+| Enforces at commit or CI time | Supported (Git hooks, GitHub Action) | Supported (pre-commit, GitHub Action) | Supported (pre-commit, GitHub Action) |
+
+How to read the levels:
+
+- **Supported** means the project documents the capability and ships it.
+- **Partial** means the project covers part of it, or the retrieved
+  documentation does not establish the whole of it. If you need the whole of it,
+  read the linked project rather than this table.
+- **Not currently supported** means no documentation or implementation of the
+  capability was found in the sources retrieved on the date above. That is a
+  statement about those sources, not a promise about the project. The projects
+  change; follow the links.
+- **Outside scope** means the project's own stated scope leaves the capability
+  out. It is not a defect, and nothing here says otherwise.
+
+The first row names each project's scope rather than carrying a support level,
+because it is the row the other twelve are read against.
+
+Three rows are worth a note, since a label alone hides the reason:
+
+- **Explicit agent instruction files.** This is where the two projects are
+  strongest and Hygiene is deliberately weakest. They validate the file; Hygiene
+  asks a different question about the words in it. `hygiene exposure` models
+  which files a tool's own documentation says it loads, and it models six tools.
+- **Git history.** All three rows are Partial for different reasons, and none of
+  them is the same check. Hygiene reports deleted prose that is still
+  retrievable; ctxlint repairs a broken path by looking for the rename; agnix
+  documents no history use. A repository can use all three.
+- **Determinism.** Hygiene's is enforced rather than asserted: the scan and the
+  hooks cannot reach the network, and a test fails if that stops being true. The
+  other two publish no determinism statement, which is a gap in the
+  documentation and not evidence of nondeterminism.
 
 ## Where they overlap
 
@@ -65,8 +120,10 @@ Hygiene's rules are not the same size of claim.
   `#` comments in code, not configuration files, for imperatives, ruling
   language, and authority claims.
 - **Git-history residue.** `HYG-HIS-001` reports prose that is no longer in the
-  tree but is still retrievable from history. Neither project documents a
-  history check.
+  tree but is still retrievable from history. Neither project documents that
+  check: ctxlint uses Git history to repair a broken path during `--fix`, which
+  is a different operation over the same input, and agnix documents no history
+  use at all.
 - **No runtime.** The scanner is Bash and Git, with no package manager, no
   install step, and no network access. That is a deliberate constraint rather
   than a feature comparison: a dependency-free scanner can run in a pre-commit

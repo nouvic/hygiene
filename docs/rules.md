@@ -53,8 +53,8 @@ it could not resolve.
 
 ## Adding a rule
 
-Add a number to `HYG_RULES` in `lib/rules.sh`, then fill in the seven
-functions for it: category, severity, title, message, why, limits, and
+Add a number to `HYG_RULES` in `lib/rules.sh`, then fill in the eight
+functions for it: category, severity, title, message, name, why, limits, and
 remediation. Give
 it a case in `benchmark/cases.tsv` at the same time, with a hand-written label,
 so the rule arrives with evidence rather than with an assertion.

@@ -54,4 +54,116 @@ else
   printf '  ✓ python imports stay on the stdlib allowlist\n'
 fi
 
+
+# ── 3. AGENTS.md routes a maintainer before it instructs an installer ──────
+# The root AGENTS.md is written for an agent installing this tool into someone
+# else's project. An agent working on this repository is a different reader,
+# and the failure mode is specific: it follows the installation steps against
+# this checkout and commits a copy of the tool's own hooks as its first change.
+# The routing block is the only thing separating the two jobs, so its
+# position above the installation steps and the one sentence that forbids
+# installing here are both tripwires.
+AGENTS="$ROOT/AGENTS.md"
+if [ ! -f "$AGENTS" ]; then
+  printf '  ✗ AGENTS.md is missing; nothing separates installing from developing\n'
+  FAIL=1
+else
+  route_at="$(grep -n '^## Which of these two jobs is yours$' "$AGENTS" \
+              | head -1 | cut -d: -f1)"
+  install_at="$(grep -n '^# Installing this' "$AGENTS" | head -1 | cut -d: -f1)"
+  if [ -z "$route_at" ] || [ -z "$install_at" ] || [ "$route_at" -ge "$install_at" ]; then
+    printf '  ✗ AGENTS.md does not route a reader before it instructs one\n'
+    printf '      routing heading at line %s, installation heading at line %s\n' \
+      "${route_at:-none}" "${install_at:-none}"
+    FAIL=1
+  else
+    route_block="$(sed -n "${route_at},${install_at}p" "$AGENTS")"
+    miss=""
+    printf '%s\n' "$route_block" | grep -q 'CONTRIBUTING.md' \
+      || miss="$miss CONTRIBUTING.md"
+    printf '%s\n' "$route_block" | grep -q '\./test/run' || miss="$miss test/run"
+    printf '%s\n' "$route_block" | grep -q '\./test/invariants' \
+      || miss="$miss test/invariants"
+    printf '%s\n' "$route_block" | grep -q 'Do not install Hygiene into this repository' \
+      || miss="$miss the-prohibition"
+    if [ -n "$miss" ]; then
+      printf '  ✗ the AGENTS.md routing block has lost:%s\n' "$miss"
+      FAIL=1
+    else
+      printf '  ✓ AGENTS.md routes a maintainer to CONTRIBUTING.md and the tests\n'
+    fi
+  fi
+fi
+
+# ── 4. every rule identifier the docs cite exists ──────────────────────────
+# Rule identifiers are stable and are cited by baselines, CI annotations, bug
+# reports, and the documentation. A typo sends a reader to `hygiene explain`
+# for a rule that does not exist, and nothing else here would ever notice.
+# lib/rules.sh is the registry; docs/rules.md is where a reader goes next, so
+# the two directions are checked against each other. A tampered copy built by
+# the suite has neither file, and that is a skip, not a pass.
+if [ ! -f "$ROOT/lib/rules.sh" ]; then
+  printf '  - no rule registry under %s; identifier check skipped\n' "$ROOT"
+else
+  . "$ROOT/lib/rules.sh"
+  cited="$(grep -rhoE 'HYG-[A-Z]{3}-[0-9]{3}' \
+             "$ROOT/README.md" "$ROOT/AGENTS.md" "$ROOT/TODO.md" \
+             "$ROOT/docs" "$ROOT/benchmark" 2>/dev/null | sort -u)"
+  unknown=""
+  for r in $cited; do
+    hyg_rule_exists "$r" || unknown="$unknown $r"
+  done
+  undoc=""
+  if [ -f "$ROOT/docs/rules.md" ]; then
+    for r in $HYG_RULES; do
+      grep -q "$r" "$ROOT/docs/rules.md" || undoc="$undoc $r"
+    done
+  fi
+  if [ -n "$unknown$undoc" ]; then
+    [ -n "$unknown" ] \
+      && printf '  ✗ cited in the docs but absent from the registry:%s\n' "$unknown"
+    [ -n "$undoc" ] \
+      && printf '  ✗ registered but absent from docs/rules.md:%s\n' "$undoc"
+    FAIL=1
+  else
+    printf '  ✓ every documented rule identifier exists\n'
+  fi
+fi
+
+# ── 5. relative documentation links resolve ────────────────────────────────
+# Every claim in this repository is meant to be checkable, and a relative link
+# is how a reader gets from a summary to the thing that backs it. A link that
+# 404s is a citation nobody can follow, so the shipped documentation is walked
+# for relative targets and each one must exist in the tree. Absolute URLs,
+# mailto links, and same-page anchors carry no local target and are skipped.
+if [ ! -d "$ROOT/docs" ]; then
+  printf '  - no documentation tree under %s; link check skipped\n' "$ROOT"
+else
+  broken=""
+  for f in "$ROOT/README.md" "$ROOT/AGENTS.md" "$ROOT/CONTRIBUTING.md" \
+           "$ROOT/SECURITY.md" "$ROOT"/docs/*.md; do
+    [ -f "$f" ] || continue
+    dir="$(dirname "$f")"
+    while IFS= read -r link; do
+      [ -n "$link" ] || continue
+      case "$link" in
+        *://*|mailto:*|'#'*) continue ;;
+      esac
+      target="${link%%#*}"
+      target="${target%% *}"
+      [ -n "$target" ] || continue
+      [ -e "$dir/$target" ] || broken="$broken
+      ${f##*/} -> $link"
+    done <<EOF
+$(grep -oE '\]\([^)]+\)' "$f" 2>/dev/null | sed -E 's/^\]\(//; s/\)$//')
+EOF
+  done
+  if [ -n "$broken" ]; then
+    printf '  ✗ relative documentation links with no target:%s\n' "$broken"
+    FAIL=1
+  else
+    printf '  ✓ relative documentation links resolve\n'
+  fi
+fi
+
 exit "$FAIL"

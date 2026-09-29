@@ -30,6 +30,29 @@ material an agent loads and how strongly it affects a particular task.
 See [Context rot, context bloat, and instruction residue](docs/context-rot-and-instruction-residue.md)
 for the distinction and a practical diagnostic sequence.
 
+## Problems Hygiene is designed to surface
+
+Each row is a symptom people report, the stored condition Hygiene looks for,
+and what a scan gives you back.
+
+| If you observe | Hygiene checks for | Result |
+|---|---|---|
+| A coding agent is getting sloppy | Instruction-shaped comments and prose that travel with the files a tool loads | Findings with a file and a line to review, or a clean report |
+| An agent ignores `CLAUDE.md` or `AGENTS.md` | Which instruction files a tool's own documentation says it loads, and what is stored in them | Stored findings sorted by loading surface, with a verdict per finding |
+| An agent repeats an approach the team already ruled out | Comments and prose recording a past disagreement (`HYG-ARG-001`, `HYG-ARG-002`) | The record, located, so it can be deleted or left to Git history |
+| An agent refers to architecture that was deleted | Source comments citing a document the tree does not contain (`HYG-PHA-001`) | The dangling citation, before anyone acts on it |
+| Repository context keeps growing | Markdown volume, and documents that only ever grow | The size, the accreting files, and what was deleted but stays retrievable |
+| Context bloat is raising token usage | How much comment and prose ship with the tree (`HYG-VOL-001`) | A count you can compare before and after a cleanup. No savings figure is claimed |
+| Repository instructions conflict | Directive-shaped statements across comments and prose | Each one, with its location. Matching is lexical, not a contradiction detector |
+| Autonomous memory keeps accumulating | Memory carriers written without a review step, via the optional Claude layer | Quarantine, and a candidate-specific approval before anything is promoted |
+| A comment is acting like permanent policy | Imperative and authority-shaped source comments (`HYG-GOV-001`) | The comment, so the constraint can move to a check that can fail |
+| New instruction residue keeps arriving | Staged source comments and a Markdown budget at commit time | A refused commit naming the file and line, before it reaches shared history |
+
+Those rows are the short version. [Capability and evidence
+map](docs/capability-and-evidence-map.md) has the same list with what each check
+establishes, what stays dependent on the tool and the task, and the evidence
+behind it, so a claim can be checked rather than taken on trust.
+
 ## Try a read-only scan
 
 Download or clone this repository, open its directory, then run:

@@ -17,6 +17,9 @@ shipped stays in one place.
 - Hygiene does not observe a model's private context, and does not claim that
   every finding was loaded by every agent.
 - Hygiene is not a general code linter, and does not reimplement ctxlint or agnix.
+- No agent instruction file and no structured-data block is added to this
+  repository for crawler or search discovery. `AGENTS.md` routes an agent that
+  is already reading it; nothing here exists to attract one.
 
 ## P0: Evidence and benchmark
 
@@ -169,3 +172,59 @@ shipped stays in one place.
       send, how to anonymize it, what Hygiene does not collect, and what happens
       to a submission. `.github/ISSUE_TEMPLATE/case-study.md` is the issue form
       for the third kind.
+
+## P4: Discovery and claim integrity
+
+The rule for this section: a claim ships with the thing that makes it
+checkable, and a claim nothing supports is removed rather than softened.
+
+- [x] The repository `AGENTS.md` routes its two readers apart before it
+      instructs either one. An agent installing the tool into another project
+      is sent to the installation steps; an agent working on this repository is
+      sent to `CONTRIBUTING.md` and to `./test/run` and `./test/invariants`, and
+      is told not to install the tool into itself. Enforced by section 3 of
+      `test/invariants`, with a tamper case in `test/run` proving the tripwire
+      fires on a copy that instructs first and routes never.
+- [x] `docs/capability-and-evidence-map.md`. Ten symptoms, each mapped to the
+      stored condition, the rule or feature, the mechanism, what Hygiene
+      establishes, what stays tool and task dependent, an evidence label, and
+      the source or test behind it. Six labels are defined and used
+      consistently: MECHANICAL FACT, REPRODUCIBLE HYGIENE TEST, FOUNDING CASE
+      OBSERVATION, EXTERNAL EMPIRICAL EVIDENCE, TOOL-DEPENDENT, and NOT
+      ESTABLISHED.
+- [x] A `## Problems Hygiene is designed to surface` section in `README.md`,
+      with the same symptoms in one line each and a link to the map.
+- [x] A capability matrix in `docs/comparison.md`, thirteen rows, one support
+      level per tool, with every competitor cell read from that project's own
+      published documentation. The levels are Supported, Partial, Not currently
+      supported, and Outside scope, and the page defines what each one asserts.
+      The claim that neither project documents a history check was narrowed:
+      ctxlint documents Git history for `--fix` path repair and rename
+      detection, which is a different operation over the same input.
+- [x] Documented rule identifiers are validated. `test/invariants` fails when a
+      rule identifier cited in `README.md`, `AGENTS.md`, `TODO.md`, `docs/`, or
+      `benchmark/` is not in the registry in `lib/rules.sh`, and when a
+      registered rule is missing from `docs/rules.md`. A capability row can no
+      longer point at a rule that does not exist.
+- [x] Claim-consistency review. Every occurrence of token, context bloat,
+      hallucination, semantic, only, guarantee, eliminate, 20 percent,
+      zero-token, memory, and context engineering was read in context. Where a
+      term appears it is a stated limit or a cited source. The review is
+      recorded in the pull request description rather than in a planning file.
+- [ ] `llms.txt` was not updated by this pass, and deliberately. The file is not
+      in this branch's working tree; it lives on the orphan `gh-pages` branch,
+      which this branch does not own, and the published copy already points at
+      the README, the context-rot guide, the demo, `CONTRIBUTING.md`, and
+      `SECURITY.md`. Whoever next works on the Pages source should add the
+      capability and evidence map, the comparison page, and the benchmark
+      report to that list, and should keep every sentence there inside the
+      claims the map supports.
+- [ ] Structured data for search discovery (schema.org, JSON-LD, crawler
+      metadata) belongs on the GitHub Pages site, not in GitHub Markdown, and
+      no JSON-LD is added here. Not started, because this pass did not touch the
+      Pages source.
+- [x] No `.cursorrules`, `CLAUDE.md`, or other agent instruction file is added
+      to this repository for discovery. `AGENTS.md` exists to route an agent
+      that is already reading it, and it is the only such file here. The
+      boundary is stated under Boundaries above and is checked by the routing
+      tripwire in `test/invariants`.
