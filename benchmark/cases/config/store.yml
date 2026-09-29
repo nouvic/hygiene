@@ -1,0 +1,2 @@
+# We agreed on MySQL after the debate about read replicas.
+engine: mysql

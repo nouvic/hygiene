@@ -17,7 +17,8 @@ FAIL=0
 # Everything that executes on a user's machine — the list a reviewer checks
 # when a change adds a new executable.
 SURFACE="bin/hygiene bin/scan bin/rulings bin/memory install install-claude uninstall
-hooks/pre-commit hooks/commit-msg hooks/check-style lib/patterns.sh
+hooks/pre-commit hooks/commit-msg hooks/check-style
+lib/patterns.sh lib/rules.sh lib/findings.sh
 claude/pretooluse-hygiene.sh claude/pretooluse-rulings.py
 claude/pretooluse-persistence.py claude/posttooluse-commit-failure.py
 claude/stop-rulings.py claude/prompt-style.py claude/pretooluse-style.py"

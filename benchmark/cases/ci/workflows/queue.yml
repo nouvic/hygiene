@@ -1,0 +1,5 @@
+# Owner ruling: never change the job order.
+name: queue
+jobs:
+  retry:
+    runs-on: ubuntu-latest

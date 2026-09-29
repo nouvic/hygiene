@@ -8,3 +8,8 @@ README.md
 AGENTS.md
 CONTRIBUTING.md
 test/run
+
+# The labeled corpus is fixture text: most cases exist precisely to carry the
+# thing they are testing, and a few are deliberately incriminating to prove a
+# path exemption still holds. benchmark/README.md is the reference.
+benchmark/

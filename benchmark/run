@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# benchmark/run: score the detector against the labeled corpus.
+#
+#   benchmark/run [--format text|md] [--no-gate]
+#
+# The labels live in benchmark/cases.tsv and are written by hand. This script
+# never derives an expectation from a finding: it compares the two sets and
+# counts the difference.
+#
+# Scoring is at the granularity of one (case, rule) pair. A case is one file,
+# so a rule that fires on three lines of the same file counts once for that
+# case, and a case expected to trip two rules contributes two pairs. That is
+# the level at which a label means something: "this file carries a governance
+# comment" is a claim a reviewer can check, and "this file carries exactly two
+# such comments" is not.
+#
+# Exits 1 when aggregate precision is below the release gate, so CI can hold
+# the line. Exits 2 on a usage or setup error.
+#
+# This script is not the scanner. It runs the scanner's detector over a copy
+# of the corpus in a temporary directory, writes nothing else, and removes
+# what it made.
+
+set -uo pipefail
+export LC_ALL=C
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HYG_HOME="$(cd "$HERE/.." && pwd)"
+
+FORMAT=text
+ENFORCE=1
+GATE="${HYG_BENCH_MIN_PRECISION:-95}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --format)   FORMAT="${2:-}"; shift 2 ;;
+    --format=*) FORMAT="${1#*=}"; shift ;;
+    --no-gate)  ENFORCE=0; shift ;;
+    -h|--help)  sed -n '2,23p' "$0"; exit 0 ;;
+    *) printf 'benchmark: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+
+case "$FORMAT" in
+  text|md) ;;
+  *) printf 'benchmark: --format must be text or md, not %s\n' "$FORMAT" >&2; exit 2 ;;
+esac
+
+MANIFEST="$HERE/cases.tsv"
+CASES="$HERE/cases"
+[ -f "$MANIFEST" ] || { printf 'benchmark: no manifest at %s\n' "$MANIFEST" >&2; exit 2; }
+[ -d "$CASES" ]    || { printf 'benchmark: no corpus at %s\n' "$CASES" >&2; exit 2; }
+
+. "$HYG_HOME/lib/patterns.sh"
+. "$HYG_HOME/lib/rules.sh"
+. "$HYG_HOME/lib/findings.sh"
+
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/hyg-bench.XXXXXX")" || exit 2
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+# The corpus is copied out of the working tree before it is scanned. A
+# document reference in a fixture has to resolve against the corpus alone, and
+# a surrounding Git repository would otherwise change which files are in scope
+# and what a phantom reference resolves to.
+cp -R "$CASES" "$WORK/cases" || exit 2
+
+hyg_findings "$WORK/cases" 2>/dev/null \
+  | awk -F'\t' 'NF >= 7 { print $4 "\t" $1 }' | sort -u > "$WORK/hit.tsv"
+
+awk -F'\t' -v OFS='\t' '
+  /^#/ || NF < 3 { next }
+  $2 == "clean" { next }
+  { n = split($2, a, ","); for (i = 1; i <= n; i++) if (a[i] != "") print $3, a[i] }
+' "$MANIFEST" | sort -u > "$WORK/expect.tsv"
+
+comm -12 "$WORK/expect.tsv" "$WORK/hit.tsv" > "$WORK/both.tsv"
+comm -23 "$WORK/expect.tsv" "$WORK/hit.tsv" > "$WORK/miss.tsv"
+comm -13 "$WORK/expect.tsv" "$WORK/hit.tsv" > "$WORK/spur.tsv"
+
+lines() { [ -f "$1" ] && wc -l < "$1" | tr -d ' ' || printf '0'; }
+for_rule() { # file rule -> count
+  [ -f "$1" ] || { printf '0'; return; }
+  awk -F'\t' -v r="$2" '$2 == r' "$1" | wc -l | tr -d ' '
+}
+
+EXPECTED="$(lines "$WORK/expect.tsv")"
+FIRED="$(lines "$WORK/hit.tsv")"
+TP="$(lines "$WORK/both.tsv")"
+FP=$(( FIRED - TP ))
+FN=$(( EXPECTED - TP ))
+
+: > "$WORK/rows.tsv"
+for r in $HYG_RULES; do
+  e="$(for_rule "$WORK/expect.tsv" "$r")"
+  g="$(for_rule "$WORK/hit.tsv" "$r")"
+  t="$(for_rule "$WORK/both.tsv" "$r")"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$r" "$(hyg_rule_category "$r")" "$e" "$g" "$t" "$(( g - t ))" "$(( e - t ))" \
+    >> "$WORK/rows.tsv"
+done
+
+: > "$WORK/catrows.tsv"
+for cat in governance argument-residue phantom-reference prose-volume history-residue; do
+  awk -F'\t' -v OFS='\t' -v c="$cat" '
+    $2 == c { e += $3; g += $4; t += $5; fp += $6; fn += $7; seen = 1 }
+    END { if (seen) print c, e + 0, g + 0, t + 0, fp + 0, fn + 0 }
+  ' "$WORK/rows.tsv" >> "$WORK/catrows.tsv"
+done
+
+CASES_N="$(awk -F'\t' '!/^#/ && NF >= 3' "$MANIFEST" | wc -l | tr -d ' ')"
+FAMILIES="$(awk -F'\t' '!/^#/ && NF >= 4 { print $4 }' "$MANIFEST" | sort -u | paste -sd' ' -)"
+
+if [ $(( TP + FP )) -eq 0 ]; then PCT10=1000; else PCT10=$(( TP * 1000 / (TP + FP) )); fi
+if [ "$PCT10" -ge $(( GATE * 10 )) ]; then GATE_STATE=pass; else GATE_STATE=FAIL; fi
+
+# prec/rec are floored to one decimal in one place, so the text and Markdown
+# reports cannot disagree at the boundary.
+awk -F'\t' -v OFS='\t' '
+  function pc(n, d) { if (d == 0) return "-"; t = int(n * 1000 / d); return int(t / 10) "." t % 10 "%" }
+  { print $1, $2, $3, $4, $5, $6, $7, pc($5, $5 + $6), pc($5, $5 + $7) }
+' "$WORK/rows.tsv" > "$WORK/rule.view"
+awk -F'\t' -v OFS='\t' '
+  function pc(n, d) { if (d == 0) return "-"; t = int(n * 1000 / d); return int(t / 10) "." t % 10 "%" }
+  { print $1, $2, $3, $4, $5, $6, pc($4, $4 + $5), pc($4, $4 + $6) }
+' "$WORK/catrows.tsv" > "$WORK/cat.view"
+
+AGG_PREC="$(awk -v t="$TP" -v f="$FP" 'BEGIN { if (t + f == 0) print "-"; else { x = int(t * 1000 / (t + f)); printf "%d.%d%%", int(x / 10), x % 10 } }')"
+AGG_REC="$(awk -v t="$TP" -v n="$FN" 'BEGIN { if (t + n == 0) print "-"; else { x = int(t * 1000 / (t + n)); printf "%d.%d%%", int(x / 10), x % 10 } }')"
+
+if [ "$FORMAT" = md ]; then
+  cat <<MD
+# Benchmark results
+
+Generated by \`benchmark/report\`. Every number below comes from
+\`benchmark/run\`; none of them is written by hand. Regenerate with:
+
+    ./benchmark/report
+
+## Corpus
+
+$CASES_N labeled cases, reviewed by hand, across these families:
+
+    $FAMILIES
+
+The labels live in \`benchmark/cases.tsv\` and were written before the detector
+was run against the corpus. Each case is one file with one expected result: a
+comma-separated list of rule identifiers, or \`clean\`.
+
+## Aggregate
+
+| measure | value |
+| --- | --- |
+| cases | $CASES_N |
+| expected (case, rule) pairs | $EXPECTED |
+| true positives | $TP |
+| false positives | $FP |
+| false negatives | $FN |
+| precision | $AGG_PREC |
+| recall | $AGG_REC |
+| release gate | at least $GATE% aggregate precision |
+| gate | $GATE_STATE |
+
+## By rule
+
+| rule | category | expected | fired | true positive | false positive | false negative | precision | recall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+MD
+  awk -F'\t' '{ print "| " $1 " | " $2 " | " $3 " | " $4 " | " $5 " | " $6 " | " $7 " | " $8 " | " $9 " |" }' "$WORK/rule.view"
+  cat <<MD
+
+## By category
+
+| category | expected | fired | true positive | false positive | false negative | precision | recall |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+MD
+  awk -F'\t' '{ print "| " $1 " | " $2 " | " $3 " | " $4 " | " $5 " | " $6 " | " $7 " | " $8 " |" }' "$WORK/cat.view"
+  cat <<MD
+
+## Unscored rules
+
+A rule with no cases in this corpus is not scored, and its row above reads
+\`-\` for precision and recall. Today:
+MD
+  awk -F'\t' '$3 == 0 { print "- `" $1 "` (" $2 ")" }' "$WORK/rule.view"
+  cat <<MD
+
+\`HYG-HIS-001\` needs Git history, and this corpus is a plain tree. The
+scanner's own tests cover it; this benchmark does not.
+
+## Mismatches
+
+Every false positive and false negative in the corpus, named. A mismatch is
+a finding about the detector and not about the corpus: the labels were written
+by hand first. \`benchmark/README.md\` records the false-positive classes we
+know about and why they are left standing.
+MD
+  if [ "$FP" -eq 0 ] && [ "$FN" -eq 0 ]; then
+    printf '\nNone. Every labeled case matched its expectation exactly.\n'
+  else
+    printf '\nFalse positives:\n\n'
+    if [ -s "$WORK/spur.tsv" ]; then
+      awk -F'\t' '{ print "- `" $2 "` at `" $1 "`" }' "$WORK/spur.tsv"
+    else
+      printf 'None, on any case in the corpus.\n'
+    fi
+    printf '\nFalse negatives:\n\n'
+    if [ -s "$WORK/miss.tsv" ]; then
+      awk -F'\t' '{ print "- `" $2 "` at `" $1 "`" }' "$WORK/miss.tsv"
+    else
+      printf 'None, on any case in the corpus.\n'
+    fi
+  fi
+  cat <<MD
+
+## What these numbers do not say
+
+The corpus is a set of clear archetypes, one per family per case. It is not a
+random sample of real repositories, so recall here is an upper bound and not
+an estimate of what the detector finds in the field. Precision is the number
+the gate is set on, because a false positive is what makes a scanner get
+uninstalled.
+MD
+else
+  printf 'hygiene detector benchmark\n'
+  printf 'corpus: %s labeled cases, %s families\n' "$CASES_N" "$(printf '%s' "$FAMILIES" | wc -w | tr -d ' ')"
+  printf 'scoring: one (case, rule) pair per case in which a rule fired\n\n'
+  printf '%-14s %-19s %7s %7s %7s %7s %7s %8s %7s\n' \
+    rule category expect fired tp fp fn prec rec
+  awk -F'\t' '{ printf "%-14s %-19s %7s %7s %7s %7s %7s %8s %7s\n", $1, $2, $3, $4, $5, $6, $7, $8, $9 }' "$WORK/rule.view"
+  printf '%-34s %7s %7s %7s %7s %7s %8s %7s\n' \
+    aggregate "$EXPECTED" "$FIRED" "$TP" "$FP" "$FN" "$AGG_PREC" "$AGG_REC"
+  printf '\nrelease gate: at least %s%% aggregate precision ... %s\n' "$GATE" "$GATE_STATE"
+
+  printf '\n%-19s %7s %7s %7s %7s %7s %8s %7s\n' \
+    category expect fired tp fp fn prec rec
+  awk -F'\t' '{ printf "%-19s %7s %7s %7s %7s %7s %8s %7s\n", $1, $2, $3, $4, $5, $6, $7, $8 }' "$WORK/cat.view"
+
+  if [ -s "$WORK/spur.tsv" ]; then
+    printf '\nfalse positives (%s)\n' "$FP"
+    awk -F'\t' '{ printf "  %-14s %s\n", $2, $1 }' "$WORK/spur.tsv"
+  else
+    printf '\nfalse positives (0)\n'
+  fi
+  if [ -s "$WORK/miss.tsv" ]; then
+    printf '\nfalse negatives (%s)\n' "$FN"
+    awk -F'\t' '{ printf "  %-14s %s\n", $2, $1 }' "$WORK/miss.tsv"
+  else
+    printf '\nfalse negatives (0)\n'
+  fi
+fi
+
+if [ "$ENFORCE" = 1 ] && [ "$GATE_STATE" = FAIL ]; then
+  exit 1
+fi
+exit 0
