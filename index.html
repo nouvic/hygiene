@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hygiene: Find Stale Instructions in AI-Assisted Repositories</title>
-  <meta name="description" content="Scan AI-assisted repositories for stale instructions, argument residue, phantom authority, and growing prose. Free, local, read-only, and open source.">
+  <meta name="description" content="Check whether stale repository instructions, missing documents, or growing prose may be contributing to AI coding context bloat or context rot.">
   <meta name="author" content="Vicky Durel">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="theme-color" content="#171815">
@@ -78,6 +78,13 @@
         }
       }, {
         "@type": "Question",
+        "name": "Can Hygiene fix context rot or an AI coding agent that is getting sloppy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Hygiene was created after repository residue caused friction, context bloat, and unintended governance in a real AI-assisted project. It checks for the same stored conditions elsewhere, but one scan cannot attribute every model response to a specific finding."
+        }
+      }, {
+        "@type": "Question",
         "name": "What does Hygiene scan?",
         "acceptedAnswer": {
           "@type": "Answer",
@@ -119,6 +126,7 @@
     </a>
     <nav aria-label="Primary navigation">
       <a href="#problem">Problem</a>
+      <a href="#symptoms">Symptoms</a>
       <a href="#signals">Signals</a>
       <a href="#try-it">Try it</a>
       <a href="#questions">Questions</a>
@@ -171,8 +179,27 @@
       </div>
     </section>
 
+    <section class="symptoms section" id="symptoms">
+      <div class="symptoms-intro">
+        <div class="section-label">01 / Symptoms and diagnosis</div>
+        <h2>Is your coding agent getting sloppy or following old instructions?</h2>
+        <p>Developers often call the experience context rot, context bloat, or context drift. Those phrases describe symptoms, not a single cause.</p>
+      </div>
+      <div class="symptom-grid">
+        <article><h3>Ignoring repository instructions</h3><p>Claude Code or another agent appears to ignore <code>CLAUDE.md</code>, <code>AGENTS.md</code>, or a recent project decision.</p></article>
+        <article><h3>Repeating rejected approaches</h3><p>Cursor, Copilot, Codex, or another agent returns to an approach the team already ruled out.</p></article>
+        <article><h3>Hallucinating old architecture</h3><p>The agent refers to deleted documents, old code structure, or authority that is no longer present.</p></article>
+        <article><h3>Accumulating context noise</h3><p>Comments, instruction files, and Markdown keep growing while their current authority becomes harder to judge.</p></article>
+      </div>
+      <div class="diagnostic-boundary">
+        <strong>What Hygiene can establish</strong>
+        <p>Hygiene was created after repository residue caused friction, context bloat, and unintended governance in a real AI-assisted project. Cleaning it improved that workflow. The scanner checks for the same stored conditions elsewhere; one scan cannot attribute every model response to a specific finding.</p>
+        <a href="guides/context-rot-and-instruction-residue/">Understand context rot, context bloat, and instruction residue ↗</a>
+      </div>
+    </section>
+
     <section class="problem section" id="problem">
-      <div class="section-label">01 / The problem</div>
+      <div class="section-label">02 / The problem</div>
       <div class="problem-grid">
         <div>
           <h2>Repositories remember more than code.</h2>
@@ -193,7 +220,7 @@
 
     <section class="signals section" id="signals">
       <div class="section-heading">
-        <div class="section-label">02 / What it reports</div>
+        <div class="section-label">03 / What it reports</div>
         <h2>Signals for review.<br>Not verdicts.</h2>
         <p>Hygiene uses explicit heuristics. A match is a prompt for human review, and a clean report only means there were no matches under the current patterns and exemptions.</p>
       </div>
@@ -234,7 +261,7 @@
     <section class="boundary section">
       <div class="boundary-card">
         <div>
-          <div class="section-label">03 / The boundary</div>
+          <div class="section-label">04 / The boundary</div>
           <h2>Small enough to inspect.</h2>
         </div>
         <div class="boundary-list">
@@ -248,7 +275,7 @@
 
     <section class="try section" id="try-it">
       <div class="try-copy">
-        <div class="section-label">04 / Try it</div>
+        <div class="section-label">05 / Try it</div>
         <h2>One scan. Then tell us what happened.</h2>
         <p>Clone the repository and point Hygiene at a project you use with a coding agent. Useful findings, false positives, and clean scans are all valuable public-beta evidence.</p>
         <div class="command" role="group" aria-label="Clone and scan commands">
@@ -269,11 +296,15 @@
 
     <section class="faq section" id="questions">
       <div class="faq-intro">
-        <div class="section-label">05 / Clear answers</div>
+        <div class="section-label">06 / Clear answers</div>
         <h2>Questions worth answering plainly.</h2>
         <p>Hygiene is intentionally narrow. These answers define what it can establish and where human judgment begins.</p>
       </div>
       <div class="faq-list">
+        <article>
+          <h3>Can it fix context rot or a coding agent that is getting sloppy?</h3>
+          <p>Hygiene began with an observed case: repository residue made later AI-assisted work harder to steer, and cleaning it reduced that friction. The scanner tests for the same stored conditions elsewhere without treating each finding as automatic proof of causation.</p>
+        </article>
         <article>
           <h3>What is instruction residue?</h3>
           <p>Rule-like or decision-like prose that remains in source comments and repository documents after its original context has changed or disappeared.</p>
@@ -299,23 +330,23 @@
 
     <section class="origin section" aria-labelledby="origin-title">
       <div>
-        <div class="section-label">06 / Why it exists</div>
+        <div class="section-label">07 / Why it exists</div>
         <h2 id="origin-title">Built from a problem found in real repositories.</h2>
       </div>
       <div class="origin-copy">
-        <p>Vicky Durel built Hygiene after seeing AI-assisted work leave behind old rulings, rejected approaches, and references whose authority was no longer clear. The first release turns that observation into explicit, inspectable heuristics instead of asking another model to judge the repository.</p>
+        <p>Vicky Durel built Hygiene after accumulated residue in an AI-assisted project created context bloat, unintended governance, and friction in later work. Cleaning the repository improved that workflow. The first release turns that observed failure mode into explicit, inspectable heuristics instead of asking another model to judge the repository.</p>
         <p>The public beta is the next test: findings, false positives, and clean scans will show where the premise holds and where the patterns need to change.</p>
         <a href="https://github.com/nouvic/hygiene#why-this-exists">Read why Hygiene exists ↗</a>
       </div>
     </section>
 
     <section class="evidence section">
-      <div class="section-label">07 / Evidence and limits</div>
+      <div class="section-label">08 / Evidence and limits</div>
       <div class="evidence-grid">
         <h2>The broader problem has evidence. This tool still needs trials.</h2>
         <div>
           <p>A public Claude Code report describes feedback accumulating without expiry. An ETH Zurich study found no task-success improvement and over 20% higher inference cost from context files in its evaluated settings.</p>
-          <p>Neither source proves Hygiene is effective, or that this specific residue is widespread. That is why this is a public beta and why clean scans matter as much as findings.</p>
+          <p>The originating project shows that this residue can create real friction; the external sources support the broader concern. Public-beta trials will show how often the patterns appear elsewhere and how much cleanup changes outcomes.</p>
           <div class="source-links">
             <a href="https://github.com/anthropics/claude-code/issues/34776">Claude Code report ↗</a>
             <a href="https://www.sri.inf.ethz.ch/publications/gloaguen2026agentsmd">ETH Zurich study ↗</a>

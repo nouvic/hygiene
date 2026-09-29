@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Context Rot vs Context Bloat vs Instruction Residue | Hygiene</title>
+  <meta name="description" content="Learn why an AI coding agent may follow old instructions, how context rot differs from repository instruction residue, and what Hygiene can actually diagnose.">
+  <meta name="author" content="Vicky Durel">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <link rel="canonical" href="https://nouvic.github.io/hygiene/guides/context-rot-and-instruction-residue/">
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../styles.css">
+  <meta property="og:title" content="Context Rot vs Context Bloat vs Instruction Residue">
+  <meta property="og:description" content="A precise diagnostic guide for AI coding agents that ignore instructions, repeat rejected approaches, or refer to deleted architecture.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://nouvic.github.io/hygiene/guides/context-rot-and-instruction-residue/">
+  <meta property="og:image" content="https://nouvic.github.io/hygiene/og-image.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Context Rot vs Context Bloat vs Instruction Residue",
+    "description": "A diagnostic guide for distinguishing active-context problems from stale instructions stored in an AI-assisted repository.",
+    "datePublished": "2026-09-29",
+    "dateModified": "2026-09-29",
+    "author": {"@type": "Person", "name": "Vicky Durel", "url": "https://vickydurel.me/"},
+    "publisher": {"@type": "Person", "name": "Vicky Durel"},
+    "mainEntityOfPage": "https://nouvic.github.io/hygiene/guides/context-rot-and-instruction-residue/"
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="../../"><img class="brand-mark" src="../../logo.svg" width="36" height="36" alt=""><span>Hygiene</span></a>
+    <nav aria-label="Guide navigation"><a href="../../">Product</a><a href="https://github.com/nouvic/hygiene">GitHub ↗</a></nav>
+  </header>
+  <main class="guide" id="main">
+    <article>
+      <p class="eyebrow"><span></span> Diagnostic guide</p>
+      <h1>Context rot, context bloat, and instruction residue are not the same problem.</h1>
+      <p class="guide-lede">If a coding agent starts ignoring instructions, repeating rejected approaches, or referring to deleted architecture, “context rot” may describe the experience. It does not identify the cause.</p>
+
+      <div class="answer-box"><strong>The short answer</strong><p>Hygiene was created after repository residue caused friction, context bloat, and unintended governance in a real AI-assisted project. Cleaning it improved that workflow. Hygiene checks whether the same stored conditions exist elsewhere; one scan cannot attribute every model response to a specific finding.</p></div>
+
+      <h2>The terms describe different layers</h2>
+      <div class="guide-table" role="region" aria-label="Context terminology comparison" tabindex="0">
+        <table>
+          <thead><tr><th>Term</th><th>Useful meaning</th><th>Can Hygiene establish it?</th></tr></thead>
+          <tbody>
+            <tr><th>Context bloat</th><td>Too much material competes for attention or consumes avoidable tokens.</td><td>Only repository prose volume. Hygiene cannot see the active model context.</td></tr>
+            <tr><th>Context drift</th><td>Current work diverges from earlier constraints or decisions.</td><td>No. It can surface stored material worth reviewing.</td></tr>
+            <tr><th>Context rot</th><td>Output quality appears to degrade as context becomes longer, noisier, or less relevant.</td><td>No. Multiple causes exist outside the repository.</td></tr>
+            <tr><th>Documentation drift</th><td>Documentation no longer matches the implementation.</td><td>Partly. Hygiene is not a semantic consistency checker.</td></tr>
+            <tr><th>Instruction residue</th><td>Rule-like or decision-like text remains after its original context changes or disappears.</td><td>Yes. This is Hygiene's primary inspection target.</td></tr>
+            <tr><th>Phantom authority</th><td>A source comment cites a document the scanner cannot find.</td><td>Yes, within the documented file and pattern coverage.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>When should you scan a repository?</h2>
+      <p>Run a read-only scan when Claude Code, Cursor, Codex, Copilot, or another coding agent:</p>
+      <ul>
+        <li>appears to follow an old project decision;</li>
+        <li>repeats an approach that was previously rejected;</li>
+        <li>cites a document or architecture that no longer exists;</li>
+        <li>behaves as if a source comment were permanent policy;</li>
+        <li>works in a repository whose instruction files and Markdown have only grown;</li>
+        <li>seems to receive conflicting repository guidance.</li>
+      </ul>
+      <p>The project that produced Hygiene experienced these symptoms alongside accumulated repository residue, and cleanup reduced the friction. That direct case evidence makes an inventory a low-cost diagnostic step. It does not make every future finding the cause of every model response.</p>
+      <pre><code>git clone https://github.com/nouvic/hygiene.git
+cd hygiene
+./bin/hygiene scan /path/to/your-project</code></pre>
+
+      <h2>How should you handle a finding?</h2>
+      <ol>
+        <li>Read the finding in its current code context.</li>
+        <li>Decide whether it explains a mechanism or preserves an expired decision.</li>
+        <li>If it is a real invariant, prefer a test, type, check, or hook that can fail.</li>
+        <li>If it is historical discussion, preserve useful rationale in an appropriate decision record or remove it.</li>
+        <li>If it is an ordinary comment, report the false positive so the scanner can become more precise.</li>
+      </ol>
+      <p>Do not delete useful documentation merely to reduce a count. Hygiene reports candidates for human review, not a target score.</p>
+
+      <h2>What can a scan not tell you?</h2>
+      <p>A scan cannot show which files an agent loaded, measure the context window, attribute a hallucination to one comment, guarantee instruction compliance, or calculate token savings. Session history, compaction, tool behavior, model changes, and conflicting prompts can produce similar symptoms.</p>
+      <p>The originating project shows that repository residue can create friction and unintended governance. Hygiene shows whether the same stored conditions are present elsewhere. Broader trials are needed to measure how often cleanup changes agent behavior and by how much.</p>
+
+      <aside class="guide-cta"><h2>Check the repository, not your intuition.</h2><p>The scan is free, local, read-only, and uses no model calls.</p><a class="button primary" href="../../#try-it">Run a Hygiene scan</a></aside>
+    </article>
+  </main>
+  <footer><a class="brand" href="../../"><img class="brand-mark" src="../../logo.svg" width="36" height="36" alt=""><span>Hygiene</span></a><p>Made with ❤️ and care by <a href="https://github.com/nouvic">Vicky Durel</a> ✨</p><p><a href="https://github.com/nouvic/hygiene">Source</a></p></footer>
+</body>
+</html>

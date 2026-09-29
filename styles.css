@@ -88,6 +88,19 @@ h2 { font-size: clamp(2.4rem, 4.5vw, 4.8rem); line-height: 1.02; letter-spacing:
 .residue-flow strong { display: block; margin-bottom: .5rem; font-size: 1.06rem; }
 .residue-flow p { margin: 0; color: var(--muted); font-size: .88rem; }
 .flow-arrow { color: #77786f; font-size: 1.5rem; }
+.symptoms-intro { display: grid; grid-template-columns: .75fr 1.25fr; gap: 8vw; }
+.symptoms-intro .section-label { grid-column: 1 / -1; margin-bottom: 0; }
+.symptoms-intro h2 { font-size: clamp(2.4rem, 4.2vw, 4.5rem); }
+.symptoms-intro > p { color: var(--muted); font-size: 1.12rem; }
+.symptom-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 3rem; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.symptom-grid article { min-height: 190px; padding: 1.5rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.symptom-grid h3 { font-size: 1.1rem; }
+.symptom-grid p { color: var(--muted); }
+.symptom-grid code { color: #4e6800; font-weight: 700; }
+.diagnostic-boundary { margin-top: 2rem; padding: 1.5rem; background: var(--acid); border-radius: 8px; }
+.diagnostic-boundary strong { display: block; margin-bottom: .45rem; }
+.diagnostic-boundary p { max-width: 900px; color: #3f432f; }
+.diagnostic-boundary a { font-weight: 800; }
 
 .signals { display: grid; grid-template-columns: .7fr 1.3fr; gap: 7vw; }
 .section-heading { position: sticky; top: 2rem; align-self: start; }
@@ -145,12 +158,29 @@ h2 { font-size: clamp(2.4rem, 4.5vw, 4.8rem); line-height: 1.02; letter-spacing:
 footer { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; padding: 2.5rem 0; border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
 footer p { margin: 0; text-align: center; }
 footer p:last-child { text-align: right; }
+.guide { width: min(calc(100% - 3rem), 900px); margin: 0 auto; padding: 6rem 0; }
+.guide article > h1 { max-width: 880px; font-size: clamp(3.2rem, 7vw, 6.3rem); }
+.guide-lede { color: #4d4f47; font-size: 1.3rem; }
+.guide article > h2 { margin-top: 5rem; font-size: clamp(2rem, 4vw, 3.4rem); }
+.guide article > p, .guide article > ul, .guide article > ol { font-size: 1.06rem; }
+.guide li { margin-bottom: .65rem; }
+.answer-box { margin: 3rem 0; padding: 1.5rem; background: var(--acid); border-radius: 8px; }
+.answer-box p { margin: .4rem 0 0; color: #3f432f; }
+.guide-table { overflow-x: auto; }
+.guide table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.25); }
+.guide th, .guide td { padding: 1rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.guide thead th { background: var(--ink); color: var(--white); }
+.guide tbody th { min-width: 160px; }
+.guide pre { overflow-x: auto; padding: 1.4rem; background: var(--terminal); color: var(--white); border-radius: 8px; line-height: 1.7; }
+.guide-cta { margin-top: 5rem; padding: 2.5rem; background: var(--acid); border-radius: 10px; }
+.guide-cta h2 { margin-bottom: .7rem; font-size: 2.2rem; }
 
 @media (max-width: 900px) {
   nav > a:not(.nav-cta) { display: none; }
   .hero { grid-template-columns: 1fr; min-height: auto; gap: 5rem; }
   .terminal-wrap { max-width: 650px; }
   .problem-grid, .signals, .try, .evidence-grid, .boundary-card, .faq, .origin { grid-template-columns: 1fr; }
+  .symptoms-intro { grid-template-columns: 1fr; }
   .section-heading, .faq-intro { position: static; }
   .residue-flow { grid-template-columns: 1fr; }
   .flow-arrow { transform: rotate(90deg); justify-self: center; }
@@ -167,6 +197,7 @@ footer p:last-child { text-align: right; }
   h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
   .section { padding: 5rem 0; }
   .signal-grid { grid-template-columns: 1fr; }
+  .symptom-grid { grid-template-columns: 1fr; }
   .signal-grid article { min-height: 210px; }
   .boundary-card { padding: 1.5rem; }
   .faq-list article { grid-template-columns: 1fr; gap: .4rem; }

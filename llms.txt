@@ -6,6 +6,7 @@
 
 - [Source and documentation](https://github.com/nouvic/hygiene)
 - [Why Hygiene exists](https://github.com/nouvic/hygiene#why-this-exists)
+- [Context rot, context bloat, and instruction residue](https://nouvic.github.io/hygiene/guides/context-rot-and-instruction-residue/)
 - [Demonstration](https://github.com/nouvic/hygiene/blob/main/docs/demo.md)
 - [Contributing](https://github.com/nouvic/hygiene/blob/main/CONTRIBUTING.md)
 - [Security policy](https://github.com/nouvic/hygiene/blob/main/SECURITY.md)
