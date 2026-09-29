@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# self-scan — the shipped tree must not carry its own findings.
+#
+# The warning rules are the product: a governance comment, a record of an old
+# argument, or a citation to a document that does not exist, anywhere in the
+# source this repository ships. If Hygiene's own tree accumulates one of those,
+# the tool is asking for something it does not do.
+#
+# The informational rules are not gated. Comment volume is a size signal, and a
+# Bash library is mostly comment on purpose; the rule says so itself. This
+# script prints the whole report so the informational findings stay visible in
+# the CI log instead of being suppressed.
+
+set -uo pipefail
+HYG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$HYG" || exit 2
+
+# NO_COLOR so the section lines can be matched literally.
+REPORT="$(NO_COLOR=1 ./bin/scan . 2>/dev/null)"
+printf '%s\n' "$REPORT"
+
+BAD=0
+for section in 'governance in comments' 'argument residue' 'phantom authority'; do
+  if printf '%s\n' "$REPORT" | grep -q "^  $section   none$"; then
+    printf '  ok: %s is none\n' "$section"
+  else
+    printf '  FAIL: %s carries findings\n' "$section"
+    BAD=1
+  fi
+done
+
+exit "$BAD"

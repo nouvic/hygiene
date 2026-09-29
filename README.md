@@ -42,6 +42,30 @@ The scan writes nothing and always exits 0. No hooks or agent settings are chang
 It prints candidate findings with file locations so you can inspect them locally.
 For a small reproducible example, see the [demo](docs/demo.md).
 
+For CI and other tools, the same scan emits a document:
+
+```sh
+./bin/hygiene scan --format json  /path/to/your-project
+./bin/hygiene scan --format sarif /path/to/your-project > hygiene.sarif
+```
+
+Both keep stdout to the document alone and still exit 0 on findings. See
+[Output formats](docs/formats.md) for the JSON schema and the SARIF mapping, and
+`./bin/hygiene explain HYG-GOV-001` for what any single rule does and does not
+claim.
+
+A repository with an existing backlog can record it once and then report only
+what is new:
+
+```sh
+./bin/hygiene scan --write-baseline /path/to/your-project
+./bin/hygiene scan --new --baseline /path/to/your-project
+```
+
+`--new` without a baseline is an error rather than an empty baseline, so a
+missing file cannot masquerade as a clean history. See
+[Baselines](docs/baselines.md) for how a baseline differs from `.hygieneignore`.
+
 ```text
 // Owner ruling: NEVER change this flow. See OLD-DESIGN.md
 // The user rejected this approach twice.

@@ -31,5 +31,9 @@ jobs:
         run: |
           ./benchmark/report
           git diff --exit-code -- benchmark/RESULTS.md
-      - name: self-scan reports clean
-        run: ./bin/scan . | grep -q 'clean\.'
+      # The shipped tree must carry no governance comment, argument residue, or
+      # phantom document reference. The informational rules stay reported and
+      # ungated: comment volume in a scanner is a size signal, not a finding
+      # someone has to act on.
+      - name: self-scan holds no warning findings
+        run: ./test/self-scan
