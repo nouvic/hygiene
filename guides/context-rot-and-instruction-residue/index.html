@@ -58,6 +58,11 @@
         </table>
       </div>
 
+      <h2>Why context bloat costs more tokens</h2>
+      <p>This relationship is established: model providers meter and price input tokens. <a href="https://docs.anthropic.com/en/docs/about-claude/pricing">Anthropic documents input-token pricing and premium long-context rates</a>, while <a href="https://platform.openai.com/pricing">OpenAI also prices model input per token</a>. More material included in a request means more input tokens processed, subject to provider-specific caching and pricing rules.</p>
+      <p>The 2026 ETH Zurich study <a href="https://arxiv.org/abs/2602.11988"><cite>Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?</cite></a> found over 20% higher inference cost from context files in its evaluated settings. That is direct evidence for those experiments, not a universal savings estimate for Hygiene.</p>
+      <p>Hygiene reports repository prose volume and residue candidates. It does not yet measure which material a particular agent loaded or calculate tokens saved after cleanup.</p>
+
       <h2>When should you scan a repository?</h2>
       <p>Run a read-only scan when Claude Code, Cursor, Codex, Copilot, or another coding agent:</p>
       <ul>
