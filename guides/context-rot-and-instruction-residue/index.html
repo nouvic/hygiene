@@ -41,7 +41,7 @@
       <h1>Context rot, context bloat, and instruction residue are not the same problem.</h1>
       <p class="guide-lede">If a coding agent starts ignoring instructions, repeating rejected approaches, or referring to deleted architecture, “context rot” may describe the experience. It does not identify the cause.</p>
 
-      <div class="answer-box"><strong>The short answer</strong><p>Hygiene was created after repository residue caused friction, context bloat, and unintended governance in a real AI-assisted project. Cleaning it improved that workflow. Hygiene checks whether the same stored conditions exist elsewhere; one scan cannot attribute every model response to a specific finding.</p></div>
+      <div class="answer-box"><strong>The short answer</strong><p>Hygiene was created after repository residue caused friction, context bloat, and unintended governance in a real AI-assisted project. Cleaning it improved that workflow. When an agent loads governance comments or stale prose, the material consumes input tokens; contradictions create conflicting context; and prescriptive comments can become unintended governance.</p></div>
 
       <h2>The terms describe different layers</h2>
       <div class="guide-table" role="region" aria-label="Context terminology comparison" tabindex="0">
@@ -73,7 +73,7 @@
         <li>works in a repository whose instruction files and Markdown have only grown;</li>
         <li>seems to receive conflicting repository guidance.</li>
       </ul>
-      <p>The project that produced Hygiene experienced these symptoms alongside accumulated repository residue, and cleanup reduced the friction. That direct case evidence makes an inventory a low-cost diagnostic step. It does not make every future finding the cause of every model response.</p>
+      <p>The project that produced Hygiene experienced these symptoms alongside accumulated repository residue, and cleanup reduced the friction. The mechanism is direct: repository text loaded by an agent becomes input context. What varies is which material the tool loads and how strongly it affects the task.</p>
       <pre><code>git clone https://github.com/nouvic/hygiene.git
 cd hygiene
 ./bin/hygiene scan /path/to/your-project</code></pre>
@@ -90,7 +90,7 @@ cd hygiene
 
       <h2>What can a scan not tell you?</h2>
       <p>A scan cannot show which files an agent loaded, measure the context window, attribute a hallucination to one comment, guarantee instruction compliance, or calculate token savings. Session history, compaction, tool behavior, model changes, and conflicting prompts can produce similar symptoms.</p>
-      <p>The originating project shows that repository residue can create friction and unintended governance. Hygiene shows whether the same stored conditions are present elsewhere. Broader trials are needed to measure how often cleanup changes agent behavior and by how much.</p>
+      <p>The originating project shows that repository residue created friction and unintended governance. Hygiene shows whether the same stored conditions are present elsewhere. Broader trials measure prevalence and effect size; they are not needed to establish that loaded text consumes context or that contradictory instructions create conflicting context.</p>
 
       <aside class="guide-cta"><h2>Check the repository, not your intuition.</h2><p>The scan is free, local, read-only, and uses no model calls.</p><a class="button primary" href="../../#try-it">Run a Hygiene scan</a></aside>
     </article>
