@@ -1,0 +1,45 @@
+# What `hygiene exposure` must say about the synthetic repositories beside this
+# file, one row per assertion. Read by the fixture section of test/run.
+#
+#   repo<TAB>tool<TAB>path<TAB>surface<TAB>exposure
+#
+# surface is the loading surface the report must give the path, or `not-listed`
+# when no row is about it and it holds no finding. exposure is the verdict for
+# the first finding in that file: `likely exposed`, `loading unknown`, `stored`,
+# `none` for a file that must hold no finding, or `-` to assert the surface only.
+#
+# The negative rows matter more than the positive ones. A file this command
+# calls loaded when the tool's documentation does not say so is the worst bug it
+# can have, so every row below that reads `not-listed` or `unknown` is load
+# bearing.
+claude-code	claude-code	CLAUDE.md	automatic	likely exposed
+claude-code	claude-code	docs/design.md	referenced	loading unknown
+claude-code	claude-code	.claude/rules/style.md	automatic	likely exposed
+claude-code	claude-code	.claude/rules/api.md	configured	likely exposed
+claude-code	claude-code	notes/scratch.md	not-listed	stored
+cursor	cursor	AGENTS.md	automatic	likely exposed
+cursor	cursor	.cursor/rules/always.mdc	automatic	likely exposed
+cursor	cursor	.cursor/rules/globs.mdc	configured	likely exposed
+cursor	cursor	.cursor/rules/described.mdc	unknown	loading unknown
+cursor	cursor	.cursor/rules/plain.md	unknown	stored
+cursor	cursor	.cursorrules	unknown	-
+cursor	cursor	CLAUDE.md	unknown	stored
+cursor	cursor	notes/scratch.md	not-listed	stored
+codex	codex	AGENTS.override.md	automatic	none
+codex	codex	AGENTS.md	unknown	loading unknown
+codex	codex	svc/AGENTS.md	configured	likely exposed
+codex	codex	notes/scratch.md	not-listed	stored
+copilot	copilot	.github/copilot-instructions.md	automatic	none
+copilot	copilot	.github/instructions/ts.instructions.md	configured	none
+copilot	copilot	.github/instructions/plain.instructions.md	unknown	loading unknown
+copilot	copilot	AGENTS.md	automatic	likely exposed
+copilot	copilot	CLAUDE.md	unknown	loading unknown
+copilot	copilot	notes/scratch.md	not-listed	stored
+generic	generic	AGENTS.md	automatic	none
+generic	generic	svc/AGENTS.md	configured	likely exposed
+ambiguous	claude-code	CLAUDE.md	automatic	none
+ambiguous	claude-code	AGENTS.md	unknown	loading unknown
+ambiguous	claude-code	notes/runbook.md	not-listed	stored
+claude-code	generic	CLAUDE.md	not-listed	stored
+claude-code	generic	docs/design.md	not-listed	stored
+cursor	codex	.cursor/rules/described.mdc	not-listed	stored

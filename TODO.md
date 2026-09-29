@@ -95,14 +95,35 @@ shipped stays in one place.
 
 ## P2: Context exposure
 
-- [ ] `hygiene exposure --tool claude-code|cursor|codex|copilot|generic`.
-- [ ] Only documented, deterministic loading surfaces, with the sources cited.
-- [ ] Findings split into stored in explicit instruction files, reachable
-      through documented imports, and elsewhere in the repository.
-- [ ] Text and JSON output.
-- [ ] Synthetic repositories for every supported tool, plus ambiguous and
-      negative tests.
-- [ ] Fail open when a configuration cannot be parsed, and report the limitation.
+- [x] `hygiene exposure --tool claude-code|cursor|codex|copilot|generic`.
+      `bin/exposure` is read-only, requires the tool, and exits 0 for any report
+      and 2 for a usage error. There is no default tool, because the tools
+      document different surfaces and a default would invent an answer for
+      whichever one was not chosen.
+- [x] Only documented, deterministic loading surfaces, with the sources cited.
+      Per-tool behaviour is derived from each vendor's own public documentation
+      and cited with a URL in `docs/context-exposure.md`. The behaviour itself
+      is data in `lib/exposure-surfaces.tsv` and `lib/exposure-limits.tsv`,
+      interpreted by `lib/exposure.sh`.
+- [x] Findings split into stored in explicit instruction files, reachable
+      through documented imports, and elsewhere in the repository. Three
+      verdicts, none of them a claim about a running agent: `likely exposed`
+      for a documented surface, `loading unknown` for a referenced file or a
+      rule that decides by reading the file, `stored` for everything else.
+- [x] Text and JSON output. `--format json` carries the surface of every file
+      in scope with the reason beside it, so a finding and its verdict are read
+      against the same map.
+- [x] Synthetic repositories for every supported tool, plus ambiguous and
+      negative tests. `test/exposure/` holds one repository per tool and one
+      that is deliberately ambiguous, with the expected surface and verdict for
+      each path in `test/exposure/expected.tsv`. Most rows are negative: a file
+      reported as loaded when the documentation does not say so is the worst
+      bug this feature can have.
+- [x] Fail open when a configuration cannot be parsed, and report the limitation.
+      Frontmatter that does not close is reported as unknown with the reason in
+      the row, and a documented fallback is used and named where a tool
+      describes one. A path that resolves outside the tree is printed as
+      written.
 
 ## P3: Distribution and authority
 

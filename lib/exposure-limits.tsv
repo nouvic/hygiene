@@ -1,0 +1,32 @@
+# The limitations of one tool's exposure report, one row per limitation. Read
+# by lib/exposure.sh.
+#
+#   tool	check	pattern	text
+#
+# check decides whether the row is printed for this repository:
+#
+#   always    printed every run
+#   present   printed when a file in scope matches pattern, a shell case glob
+#             tested against the repository-relative path
+#
+# A row is a statement about what this report cannot know, printed only where it
+# is true of the repository being scanned. A report that repeats every caveat
+# every time teaches a reader to skip them.
+#
+# tool	check	pattern	text
+claude-code	always	-	User and organization memory loads in every session and sits outside any repository, so this report cannot see it: the user-level and managed instruction files, a home rules directory, and the per-project auto-memory directory whose index is loaded at every session start.
+claude-code	always	-	Settings files are not read. An exclusion list, a setting-sources flag or a project-instructions setting can add or remove files from the surfaces above, so a file called automatic here can be excluded for a given run.
+claude-code	present	AGENTS.md|*/AGENTS.md	An agent-instruction file is present. Whether it is read at all also depends on the absence of a project instruction file above the repository, which a scan of this repository cannot determine.
+claude-code	present	*/CLAUDE.md|*/CLAUDE.local.md|*/.claude/CLAUDE.md	An instruction file is present. Claude Code skips one larger than 4 MiB, and loads only the first 200 lines or 25KB of the auto-memory index, so a file on a surface above can still be dropped for size.
+cursor	always	-	Cursor user rules live in settings and in a home rules directory, and team rules live on Cursor's servers. Neither is in a repository, so neither appears above.
+cursor	always	-	A rule whose frontmatter cannot be read is reported as unknown rather than assumed to load or not to load.
+cursor	present	*/.cursor/rules/*	A rules directory below the repository root is not modelled: the rules reference places project rules in .cursor/rules at the project root, and says nothing about a second one further down.
+cursor	present	.cursorrules|*/.cursorrules	A .cursorrules file is present. The current Cursor rules reference does not mention it, so this report cannot say whether it is still read.
+codex	always	-	The Codex home directory is outside any repository. An override file there is read first and can replace what this report describes.
+codex	always	-	The fallback-filename setting lives in the user's own config rather than in a repository and is not read here, so a repository relying on it is under-reported.
+codex	always	-	Codex follows only the root-to-working-directory path, and this report does not know the directory a session starts in. It also stops adding files once the combined size reaches its project document byte cap (32 KiB by default), so a file that is on a surface above can still be past the cap or off the path.
+copilot	always	-	A path-specific instruction file can carry an excludeAgent field withdrawing it from code review or the cloud agent. Only applyTo is read here, so such a file is reported by its path rather than by that field.
+copilot	always	-	Personal and organization instructions are configured outside the repository and are not visible to this report.
+copilot	always	-	Code review reads instructions from the head branch of a pull request rather than the branch this scan ran on.
+copilot	always	-	Path-specific instructions are documented as reaching the cloud agent and code review, so their effect elsewhere is not modeled.
+generic	always	-	The generic model covers the agent-instruction file only. Every other tool's private surfaces are out of scope by definition, so a file with no surface here is reported as unknown rather than as unexposed.

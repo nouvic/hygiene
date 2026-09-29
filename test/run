@@ -119,6 +119,12 @@ check "attributed preference in project prose" \
   "$(commits "$D" memory.md 'The user wanted the blue version after the discussion.' 'docs: memory')" block
 check "impersonal conceptual prose" \
   "$(commits "$D" architecture.md 'Monetary amounts use integer minor units.' 'docs: architecture')" pass
+# A Cursor rule is markdown with frontmatter, and it is read the same way as a
+# document wherever it sits: it is durable agent memory, so prose in one is
+# scanned as prose rather than passed over as an unrecognised extension.
+mkdir -p "$D/.cursor/rules"
+check "a Cursor rule is read as prose" \
+  "$(commits "$D" .cursor/rules/memory.mdc 'The user wanted the blue version after the discussion.' 'docs: cursor rule')" block
 
 B="$(newrepo blocked-message)"
 printf '%s\n' '// Owner ruling: never change this file by hand' 'export const b=1;' > "$B/blocked.ts"
@@ -914,6 +920,256 @@ check "installed scan emits valid json" \
   "$("$INST/.githooks/scan" --format json "$INST" 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["findings"]))')" 1
 check "install copies every library the scanner reads" \
   "$(for l in patterns rules findings report; do [ -f "$INST/.githooks/lib/$l.sh" ] || echo missing-$l; done | wc -l | tr -d ' ')" 0
+
+echo
+echo "  ── context exposure ────────────────────────────────────"
+# This command answers a question about a path in a repository. It never claims
+# an agent read anything, so a file it wrongly calls loaded is the worst bug it
+# can have. The fixture below puts one file on each documented surface and
+# several on none, and most of the checks are about the ones that must come out
+# unknown.
+EXP="$TMP/exposure"; guard "$EXP"
+mkdir -p "$EXP/src" "$EXP/docs" "$EXP/notes" "$EXP/sub" \
+         "$EXP/.claude/rules" "$EXP/.cursor/rules" "$EXP/.github/instructions"
+
+printf 'See @docs/notes.md.\n' > "$EXP/CLAUDE.md"
+printf 'Project instructions.\n' > "$EXP/AGENTS.md"
+printf 'The owner rejected this approach twice.\n' > "$EXP/sub/AGENTS.md"
+printf -- '---\npaths:\n  - "src/**"\n---\nA scoped rule.\n' > "$EXP/.claude/rules/scoped.md"
+printf 'A rule with no frontmatter.\n' > "$EXP/.claude/rules/plain.md"
+printf -- '---\npaths:\n  - "src/**"\nNever closed.\n' > "$EXP/.claude/rules/broken.md"
+printf -- '---\nalwaysApply: true\n---\nAlways.\n' > "$EXP/.cursor/rules/always.mdc"
+printf -- '---\nglobs: src/**\n---\nGlobbed.\n' > "$EXP/.cursor/rules/globs.mdc"
+printf -- '---\ndescription: something\n---\nDescribed.\n' > "$EXP/.cursor/rules/described.mdc"
+printf -- '---\nglobs: src/**\nNever closed.\n' > "$EXP/.cursor/rules/broken.mdc"
+printf 'Repository instructions.\n' > "$EXP/.github/copilot-instructions.md"
+printf -- '---\napplyTo: "**/*.ts"\n---\nTypescript.\n' > "$EXP/.github/instructions/ts.instructions.md"
+printf 'No pattern here.\n' > "$EXP/.github/instructions/plain.instructions.md"
+
+# Three findings, one for each verdict. The prose files carry the same sentence,
+# so the only thing that separates them is where they sit.
+printf 'The owner rejected this approach twice.\n' > "$EXP/docs/notes.md"
+printf 'The owner rejected this approach twice.\n' > "$EXP/notes/memory.md"
+printf '// Owner ruling: NEVER change this flow.\n' > "$EXP/src/legacy.ts"
+printf 'export const a = 1;\n' > "$EXP/src/plain.ts"
+
+expsurface() {
+  "$HYG/bin/exposure" --tool "$1" --format json "$2" 2>/dev/null \
+    | python3 -c '
+import json, sys
+want = sys.argv[1]
+for f in json.load(sys.stdin)["surfaces"]["files"]:
+    if f["path"] == want:
+        print(f["surface"]); break
+else:
+    print("not-listed")' "$3"
+}
+expverdict() {
+  "$HYG/bin/exposure" --tool "$1" --format json "$2" 2>/dev/null \
+    | python3 -c '
+import json, sys
+want = sys.argv[1]
+for f in json.load(sys.stdin)["findings"]:
+    if f["file"] == want:
+        print(f["exposure"]); break
+else:
+    print("no-finding")' "$3"
+}
+
+check "a root instruction file is automatic" \
+  "$(expsurface claude-code "$EXP" CLAUDE.md)" automatic
+check "a nested instruction file is configured" \
+  "$(expsurface claude-code "$EXP" sub/AGENTS.md)" configured
+# Two instruction files in one directory is a real conflict, and the tool
+# documents which one stops loading. The displaced file is still listed: it is
+# the answer a reader came for, not an absence of information.
+check "a displaced instruction file is unknown, not automatic" \
+  "$(expsurface claude-code "$EXP" AGENTS.md)" unknown
+check "a displaced instruction file is still reported" \
+  "$("$HYG/bin/exposure" --tool claude-code "$EXP" 2>/dev/null | grep -c '^    unknown     AGENTS.md ')" 1
+check "the same file is automatic for a tool with no displacer" \
+  "$(expsurface codex "$EXP" AGENTS.md)" automatic
+
+check "a claude rule scoped by a paths field is configured" \
+  "$(expsurface claude-code "$EXP" .claude/rules/scoped.md)" configured
+check "a claude rule with no paths field is automatic" \
+  "$(expsurface claude-code "$EXP" .claude/rules/plain.md)" automatic
+# The documented fallback for frontmatter that cannot be parsed is to load the
+# rule unscoped, so this one is reported as loading rather than as unknown.
+check "unreadable claude frontmatter falls back to loading" \
+  "$(expsurface claude-code "$EXP" .claude/rules/broken.md)" automatic
+
+check "an alwaysApply cursor rule is automatic" \
+  "$(expsurface cursor "$EXP" .cursor/rules/always.mdc)" automatic
+check "a globbed cursor rule is configured" \
+  "$(expsurface cursor "$EXP" .cursor/rules/globs.mdc)" configured
+check "a cursor rule the agent must pick is unknown" \
+  "$(expsurface cursor "$EXP" .cursor/rules/described.mdc)" unknown
+check "unreadable cursor frontmatter is unknown" \
+  "$(expsurface cursor "$EXP" .cursor/rules/broken.mdc)" unknown
+
+check "the copilot instruction file is automatic" \
+  "$(expsurface copilot "$EXP" .github/copilot-instructions.md)" automatic
+check "a copilot instruction with applyTo is configured" \
+  "$(expsurface copilot "$EXP" .github/instructions/ts.instructions.md)" configured
+# applyTo is what scopes this file. Reporting it as loading because it happens
+# to sit in the right directory would be the claim this tool exists to avoid.
+check "a copilot instruction without applyTo is unknown" \
+  "$(expsurface copilot "$EXP" .github/instructions/plain.instructions.md)" unknown
+check "a root instruction file is an alternative when another is present" \
+  "$(expsurface copilot "$EXP" CLAUDE.md)" unknown
+
+# The negative case the whole feature rests on: a file whose name suggests
+# memory, holding the same prose, on no documented surface, is not exposed.
+check "a memory-shaped file nothing documents is not listed" \
+  "$(expsurface claude-code "$EXP" notes/memory.md)" not-listed
+check "a memory-shaped file nothing documents is stored" \
+  "$(expverdict claude-code "$EXP" notes/memory.md)" stored
+check "an ordinary source file is stored" \
+  "$(expverdict claude-code "$EXP" src/legacy.ts)" stored
+check "a file an import names is loading unknown, not exposed" \
+  "$(expverdict claude-code "$EXP" docs/notes.md)" "loading unknown"
+check "a file on a configured surface is likely exposed" \
+  "$(expverdict codex "$EXP" sub/AGENTS.md)" "likely exposed"
+# Every tool that lacks the import syntax says so rather than reporting a
+# file as referenced on the strength of another tool's documentation.
+check "the import syntax is claude-only" \
+  "$("$HYG/bin/exposure" --tool codex "$EXP" 2>/dev/null | grep -c 'so no file is classified as referenced')" 1
+check "the claude report does not claim every tool shares its syntax" \
+  "$("$HYG/bin/exposure" --tool claude-code "$EXP" 2>/dev/null | grep -c 'so no file is classified as referenced')" 0
+check "every report says loading was not observed" \
+  "$("$HYG/bin/exposure" --tool cursor "$EXP" 2>/dev/null | grep -c 'not evidence that an agent read it')" 1
+
+# Read-only: the report is a property of the tree, so running it must not move
+# the tree. The digest is taken before and after all five tools run.
+BEFORE="$(find "$EXP" -type f | sort | while IFS= read -r f; do
+  printf '%s %s\n' "$f" "$(cksum < "$f")"; done | cksum)"
+for t in claude-code cursor codex copilot generic; do
+  "$HYG/bin/exposure" --tool "$t" "$EXP" >/dev/null 2>&1
+  "$HYG/bin/exposure" --tool "$t" --format json "$EXP" >/dev/null 2>&1
+done
+check "exposure writes nothing" "$BEFORE" \
+  "$(find "$EXP" -type f | sort | while IFS= read -r f; do
+     printf '%s %s\n' "$f" "$(cksum < "$f")"; done | cksum)"
+
+"$HYG/bin/exposure" --tool codex --format json "$EXP" > "$TMP/exp.json" 2>"$TMP/exp.err"
+check "exposure json exits 0" "$?" 0
+check "exposure json leaves stderr empty" "$(wc -l < "$TMP/exp.err" | tr -d ' ')" 0
+python3 - "$TMP/exp.json" <<'PYEOF' && ok "exposure json parses" || bad "exposure json parses"
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["schemaVersion"] == 1, d.get("schemaVersion")
+assert d["tool"]["name"] == "hygiene"
+assert d["agentTool"] == "codex"
+assert d["summary"]["findings"] == len(d["findings"])
+assert d["summary"]["findings"] == (d["summary"]["likelyExposed"]
+    + d["summary"]["loadingUnknown"] + d["summary"]["stored"]), d["summary"]
+files = {f["path"]: f for f in d["surfaces"]["files"]}
+assert "AGENTS.md" in files and files["AGENTS.md"]["surface"] == "automatic", files
+assert "notes/memory.md" not in files, files
+assert d["surfaces"]["counts"]["automatic"] == len(
+    [f for f in d["surfaces"]["files"] if f["surface"] == "automatic"]), d["surfaces"]
+for f in d["findings"]:
+    assert set(f) == {"ruleId", "category", "severity", "file", "line",
+                      "surface", "exposure", "surfaceReason", "fingerprint",
+                      "message", "evidence"}, f
+    assert f["exposure"] in ("likely exposed", "loading unknown", "stored"), f
+    assert f["surfaceReason"], f
+PYEOF
+
+check "a missing --tool is a usage error" \
+  "$("$HYG/bin/exposure" "$EXP" >/dev/null 2>&1; echo $?)" 2
+check "an unknown tool is refused" \
+  "$("$HYG/bin/exposure" --tool nope "$EXP" >/dev/null 2>&1; echo $?)" 2
+check "an unknown tool lists the ones it knows" \
+  "$("$HYG/bin/exposure" --tool nope "$EXP" 2>&1 | grep -c 'known tools')" 1
+check "an unknown format is refused" \
+  "$("$HYG/bin/exposure" --tool codex --format xml "$EXP" >/dev/null 2>&1; echo $?)" 2
+check "a missing path is refused" \
+  "$("$HYG/bin/exposure" --tool codex "$TMP/no-such-dir" >/dev/null 2>&1; echo $?)" 2
+check "two paths are refused" \
+  "$("$HYG/bin/exposure" --tool codex "$EXP" "$EXP" >/dev/null 2>&1; echo $?)" 2
+check "the report is quiet by default" \
+  "$("$HYG/bin/exposure" --tool codex "$EXP" 2>&1 >/dev/null | wc -l | tr -d ' ')" 0
+check "claude-code is offered as a tool" \
+  "$("$HYG/bin/exposure" --help 2>/dev/null | grep -c 'claude-code')" 1
+check "hygiene exposure dispatches" \
+  "$("$HYG/bin/hygiene" exposure --tool codex "$EXP" 2>/dev/null | grep -c 'documented surfaces')" 1
+
+# A directory that is not a repository has no history and no memory files, but
+# it is still a directory of paths, and the surfaces it holds are still real.
+PLAINEXP="$TMP/exposure-plain"; guard "$PLAINEXP"; mkdir -p "$PLAINEXP"
+printf 'Project instructions.\n' > "$PLAINEXP/AGENTS.md"
+check "a non-repository directory is reportable" \
+  "$("$HYG/bin/exposure" --tool codex "$PLAINEXP" >/dev/null 2>&1; echo $?)" 0
+check "a non-repository directory still classifies paths" \
+  "$(expsurface codex "$PLAINEXP" AGENTS.md)" automatic
+
+echo
+echo "  ── exposure fixtures ───────────────────────────────────"
+# One synthetic repository per tool is committed beside this suite, with the
+# outcome each one must produce in test/exposure/expected.tsv. The expectations
+# are data rather than assertions buried in this file, so a change to a tool's
+# documented surfaces is a reviewable diff. Most rows are negative: a file the
+# command calls loaded when the tool's documentation does not say so is the
+# worst bug this feature can have.
+#
+# Each repository is copied out of the shipped tree before it is scanned. The
+# fixture lives inside this repository, and the scanner lists tracked files with
+# git when the path is in one, so scanning it in place would report this
+# repository's files rather than the fixture's.
+EXPREPOS="claude-code cursor codex copilot generic ambiguous"
+mkdir -p "$TMP/exposurefix"
+for r in $EXPREPOS; do
+  cp -R "$HYG/test/exposure/$r" "$TMP/exposurefix/$r"
+done
+check "every fixture repository is copied out of the shipped tree" \
+  "$(ls "$TMP/exposurefix" | wc -l | tr -d ' ')" 6
+
+EXPROWS=0
+while IFS="$(printf '\t')" read -r frepo ftool fpath fsurf fexp; do
+  case "$frepo" in ''|'#'*) continue ;; esac
+  EXPROWS=$((EXPROWS + 1))
+  froot="$TMP/exposurefix/$frepo"
+  check "$frepo · $ftool · $fpath" "$(expsurface "$ftool" "$froot" "$fpath")" "$fsurf"
+  case "$fexp" in
+    '-') ;;
+    none)         check "$frepo · $ftool · $fpath · no finding" \
+                    "$(expverdict "$ftool" "$froot" "$fpath")" no-finding ;;
+    *)            check "$frepo · $ftool · $fpath · verdict" \
+                    "$(expverdict "$ftool" "$froot" "$fpath")" "$fexp" ;;
+  esac
+done < "$HYG/test/exposure/expected.tsv"
+# A manifest that stops being read, or a loop that stops iterating, would leave
+# every row above silently unasserted.
+check "the fixture manifest was walked" "$([ "$EXPROWS" -ge 30 ] && echo yes || echo "$EXPROWS")" yes
+
+# A configuration that cannot be parsed is reported, never guessed at. Copilot
+# documents a pattern as what scopes a path-specific file and no fallback for
+# one whose frontmatter does not close.
+BROKEN="$TMP/exposure-broken"; guard "$BROKEN"
+mkdir -p "$BROKEN/.github/instructions"
+printf -- '---\napplyTo: "**/*.ts"\nNever closed.\n' \
+  > "$BROKEN/.github/instructions/broken.instructions.md"
+check "unclosed frontmatter is unknown, not configured" \
+  "$(expsurface copilot "$BROKEN" .github/instructions/broken.instructions.md)" unknown
+check "unclosed frontmatter is reported rather than dropped" \
+  "$("$HYG/bin/exposure" --tool copilot "$BROKEN" 2>/dev/null \
+     | grep -c 'frontmatter is unterminated')" 1
+check "an unreadable configuration is not a failure" \
+  "$("$HYG/bin/exposure" --tool copilot "$BROKEN" >/dev/null 2>&1; echo $?)" 0
+
+# The one surface whose answer is not deterministic in a way a report must
+# still describe: a nested rules directory is present and unmodelled.
+NESTED="$TMP/exposure-nested"; guard "$NESTED"
+mkdir -p "$NESTED/pkg/.cursor/rules"
+printf -- '---\nalwaysApply: true\n---\nOnly at the root.\n' \
+  > "$NESTED/pkg/.cursor/rules/rule.mdc"
+check "a nested rules directory is not called loaded" \
+  "$(expsurface cursor "$NESTED" pkg/.cursor/rules/rule.mdc)" not-listed
+check "a nested rules directory is reported as unmodelled" \
+  "$("$HYG/bin/exposure" --tool cursor "$NESTED" 2>/dev/null \
+     | grep -c 'rules directory below the repository root is not modelled')" 1
 
 echo "  ── the shipped tree ────────────────────────────────────"
 "$HYG/test/invariants" >/dev/null 2>&1

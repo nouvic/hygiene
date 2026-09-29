@@ -11,8 +11,10 @@
 # dependencies. Test suites use both filename and directory conventions.
 HYG_EXEMPT_PATHS='(^|/)(node_modules|vendor|dist|build|out|target|coverage|\.next|\.git|\.githooks|\.husky|\.venv|__pycache__)/|(^|/)(content|contents|locales|locale|i18n|lang|messages|translations|test|tests|spec|__tests__|fixtures|testdata)/|(^|/)legal[^/]*\.|(^|/)legal/|\.(test|spec)\.|\.min\.|-lock\.|\.lock$|\.d\.ts$'
 
-# Files whose whole body is prose; scanned as documents, not for comments.
-HYG_DOC_EXT='\.(md|mdx|markdown|rst|txt)$'
+# Files whose whole body is prose; scanned as documents, not for comments. A
+# Cursor rule (.mdc) is markdown with frontmatter, and an agent instruction
+# file is prose wherever it sits, so both are read the same way as a document.
+HYG_DOC_EXT='\.(md|mdx|mdc|markdown|rst|txt)$'
 
 # Files that carry code, and therefore carry comments. Data and config files are
 # excluded — they have no comments to scan and would distort the density figure.

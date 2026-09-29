@@ -76,6 +76,27 @@ conversation as apparent policy long after the surrounding code has changed.
 Useful comments explaining a mechanism belong in the code; a match is a prompt
 for review, not proof that a comment is wrong.
 
+## Where a stored finding actually sits
+
+A finding is a property of the repository, not of a session. To see whether the
+file it sits in is one a tool's documentation says it loads:
+
+```sh
+./bin/hygiene exposure --tool claude-code /path/to/your-project
+./bin/hygiene exposure --tool cursor --format json /path/to/your-project
+```
+
+`--tool` is required and takes `claude-code`, `cursor`, `codex`, `copilot`, or
+`generic`. The report sorts stored findings by the loading surface that tool's
+own public documentation describes, and gives each one a verdict: `likely
+exposed`, `loading unknown`, or `stored`. Most findings in most repositories are
+`stored`, and that is the point of running it.
+
+The command is read-only, writes nothing, exits 0 for any report, and never
+claims an agent read a file. See
+[Context exposure](docs/context-exposure.md) for the surfaces it models, the
+documentation each one is read from, and what it does not know.
+
 ## Why this exists
 
 This started with a frustrating experience: an AI-assisted project accumulated
