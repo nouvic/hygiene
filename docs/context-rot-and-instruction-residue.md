@@ -46,8 +46,11 @@ Run a scan when Claude Code, Cursor, Codex, Copilot, or another coding agent:
 
 Hygiene was created after accumulated residue in a real repository produced these
 kinds of friction in later AI-assisted work; cleaning it improved that workflow.
-That case makes a read-only inventory a practical diagnostic step. The result of
-one scan still cannot attribute every model response to a specific finding.
+The mechanism is direct: repository material loaded by an agent becomes input
+context. It consumes tokens; stale or contradictory statements create conflicting
+context; prescriptive comments can become unintended governance. A scan establishes
+what is stored in the repository. Which material a particular agent loads and the
+size of its effect still depend on the tool and task.
 
 ```sh
 ./bin/hygiene scan /path/to/your-project
@@ -71,7 +74,8 @@ attribute a hallucination to one comment, guarantee instruction compliance, or
 calculate token savings. Session history, compaction, tool behavior, model changes,
 and conflicting user prompts can produce similar symptoms.
 
-The originating project provides direct case evidence that repository residue can
-create friction and unintended governance. Hygiene shows whether the same stored
-conditions are present elsewhere. Broader trials are needed to measure how often
-cleanup changes agent behavior and by how much.
+The originating project provides direct case evidence that repository residue
+created friction and unintended governance. Hygiene shows whether the same stored
+conditions are present elsewhere. Broader trials measure prevalence and effect
+size; they are not needed to establish that loaded text consumes context or that
+contradictory instructions create conflicting context.

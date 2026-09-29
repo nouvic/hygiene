@@ -21,8 +21,11 @@ Developers often describe the symptom before they know the cause:
 Hygiene came from a real project where accumulated repository residue created
 friction, context bloat, and unintended governance for later AI-assisted work.
 Reviewing and cleaning that residue improved the workflow. The scanner tests for
-the same stored conditions in another repository; it cannot, by itself, attribute
-every model response to one finding.
+the same stored conditions in another repository. When an agent loads governance
+comments or stale repository prose, that material becomes input context: it
+consumes tokens, contradictory statements create conflicting context, and
+prescriptive comments can become unintended governance. What varies is which
+material an agent loads and how strongly it affects a particular task.
 
 See [Context rot, context bloat, and instruction residue](docs/context-rot-and-instruction-residue.md)
 for the distinction and a practical diagnostic sequence.
