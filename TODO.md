@@ -127,10 +127,45 @@ shipped stays in one place.
 
 ## P3: Distribution and authority
 
-- [ ] An official GitHub Action supporting path, format, baseline, new-only
-      mode, and optional SARIF upload.
-- [ ] Read-only by default, with an explicit strict option.
-- [ ] A complete example workflow.
-- [ ] Benchmark status in README.md.
-- [ ] A comparison document covering Hygiene, ctxlint, and agnix.
-- [ ] A case-study template and a process for anonymized public-beta submissions.
+- [x] An official GitHub Action supporting path, format, baseline, new-only
+      mode, and optional SARIF upload. `action.yml` is a composite action at the
+      repository root, so there is no third-party action to trust and nothing to
+      install: it runs the same Bash CLI with inputs for `path`, `format`,
+      `output`, `baseline`, `new-only`, `strict`, and `summary`. The action
+      uploads nothing itself. The SARIF upload is a separate step the workflow
+      adds, and `docs/ci.md` shows it with the permission it needs and the two
+      cases where code scanning is unavailable.
+- [x] Read-only by default, with an explicit strict option. `scan` still exits 0
+      for any report. `--strict` exits 1 when the report holds a
+      warning-severity finding, and informational findings stay reported and
+      ungated, which is what their severity already says about them. A usage
+      error still exits 2 and `--strict` does not downgrade it. `test/run`
+      covers each of those, including that the flag does not change the report
+      it prints.
+- [x] A complete example workflow. `.github/workflows/hygiene.yml` runs the
+      action on this repository with the gate on and on both macOS and Linux, so
+      a change that breaks the action fails here rather than in a consuming
+      project. `docs/ci.md` covers the inputs, the exit contract, a minimal job,
+      a complete job with the report artifact and the optional SARIF upload, and
+      the baseline pattern for a repository that cannot fix everything at once.
+      The copyable workflow is `docs/examples/hygiene.yml`.
+- [x] Benchmark status in README.md. The measured precision, recall, and gate
+      result, with the label count and what the corpus does and does not
+      establish stated beside them. The numbers come from `benchmark/RESULTS.md`,
+      which is generated, so the README cannot drift from the measurement.
+- [x] A comparison document covering Hygiene, ctxlint, and agnix.
+      `docs/comparison.md`. Every statement about Hygiene is a property of its
+      own code, fixtures, or tests; every statement about the other two is
+      quoted from their public documentation with the retrieval date, and
+      neither was installed or run, which the page says. It describes scope
+      rather than superiority and lists what the other two do that Hygiene does
+      not.
+- [x] A case-study template and a process for anonymized public-beta
+      submissions. `docs/case-study-template.md` asks for repository
+      characteristics, scan version and command, findings by rule, reviewed true
+      and false positives, cleanup performed, token counts only when actually
+      measured, observed workflow change, and limitations, and treats "not
+      measured" as a complete answer. `docs/public-beta.md` documents what to
+      send, how to anonymize it, what Hygiene does not collect, and what happens
+      to a submission. `.github/ISSUE_TEMPLATE/case-study.md` is the issue form
+      for the third kind.

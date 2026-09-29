@@ -1,0 +1,111 @@
+name: Hygiene governance scan
+description: Read-only scan for instruction-like residue in source comments and repository prose
+author: nouvic
+
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  path:
+    description: Directory to scan, relative to the workspace or absolute
+    required: false
+    default: .
+  format:
+    description: 'Report format: text, json, or sarif'
+    required: false
+    default: text
+  output:
+    description: File to write the report to. Empty prints the report in the job log
+    required: false
+    default: ''
+  baseline:
+    description: >-
+      Baseline file to compare against. A relative path resolves against the
+      scanned path, the same way .hygieneignore does
+    required: false
+    default: ''
+  new-only:
+    description: >-
+      Report only findings the baseline does not already hold. Requires
+      baseline: a baseline that is missing is an error, not an empty baseline
+    required: false
+    default: 'false'
+  strict:
+    description: >-
+      Fail the step when the report holds a warning-severity finding.
+      Informational findings are reported and do not fail the step
+    required: false
+    default: 'false'
+  summary:
+    description: >-
+      Append the report to the job summary. Text reports only; a JSON or SARIF
+      document is written to output or the log instead
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    # Composite, so there is no third-party action to trust and nothing to
+    # install: the step runs the same Bash CLI the README documents. The inputs
+    # arrive through the environment, so no input is spliced into the script.
+    - id: scan
+      shell: bash
+      env:
+        HYG_IN_FORMAT: ${{ inputs.format }}
+        HYG_IN_OUTPUT: ${{ inputs.output }}
+        HYG_IN_BASELINE: ${{ inputs.baseline }}
+        HYG_IN_NEW_ONLY: ${{ inputs.new-only }}
+        HYG_IN_STRICT: ${{ inputs.strict }}
+        HYG_IN_SUMMARY: ${{ inputs.summary }}
+        HYG_IN_PATH: ${{ inputs.path }}
+      run: |
+        set -uo pipefail
+
+        args=(--format "$HYG_IN_FORMAT")
+        [ -n "$HYG_IN_BASELINE" ] && args+=(--baseline "$HYG_IN_BASELINE")
+        [ "$HYG_IN_NEW_ONLY" = true ] && args+=(--new)
+        [ "$HYG_IN_STRICT" = true ] && args+=(--strict)
+
+        set +e
+        if [ -n "$HYG_IN_OUTPUT" ]; then
+          "$GITHUB_ACTION_PATH/bin/hygiene" scan "${args[@]}" "$HYG_IN_PATH" \
+            > "$HYG_IN_OUTPUT"
+          status=$?
+          # The scan's own note about a strict failure goes to stderr and is
+          # already in the log; the summary carries the report itself.
+          if [ "$HYG_IN_SUMMARY" = true ] && [ "$HYG_IN_FORMAT" = text ] \
+             && [ -f "$HYG_IN_OUTPUT" ]; then
+            cat "$HYG_IN_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        elif [ "$HYG_IN_SUMMARY" = true ] && [ "$HYG_IN_FORMAT" = text ]; then
+          # Same report, twice: the log for the person watching the run, the
+          # summary for the person who came back to it. PIPESTATUS keeps the
+          # scan's status rather than tee's.
+          "$GITHUB_ACTION_PATH/bin/hygiene" scan "${args[@]}" "$HYG_IN_PATH" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          status="${PIPESTATUS[0]}"
+        else
+          "$GITHUB_ACTION_PATH/bin/hygiene" scan "${args[@]}" "$HYG_IN_PATH"
+          status=$?
+        fi
+        set -e
+
+        # 0 is a report, 1 is a strict failure: both wrote a report and neither
+        # is an error in the action. Anything else is a usage error or a broken
+        # runner, and the step fails without pretending a scan happened.
+        case "$status" in
+          0|1) ;;
+          2)
+            echo "::error title=hygiene::the scan was refused; see the log above"
+            exit 2 ;;
+          *)
+            echo "::error title=hygiene::the scan did not run (exit $status)"
+            exit "$status" ;;
+        esac
+
+        if [ "$status" = 1 ]; then
+          echo "::error title=hygiene::warning-severity findings; rerun without strict: true to report them without failing"
+        fi
+        exit "$status"
