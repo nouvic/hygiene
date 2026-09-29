@@ -68,7 +68,7 @@ a { color: inherit; text-underline-offset: .22em; }
 }
 .brand { display: inline-flex; align-items: center; gap: .65rem; font-weight: 800; text-decoration: none; letter-spacing: -.02em; }
 .brand-mark { display: block; width: 36px; height: 36px; border-radius: 8px; }
-.beta { padding: .16rem .45rem; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.version-badge { padding: .16rem .45rem; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 nav { display: flex; align-items: center; gap: 1.65rem; font-size: .86rem; font-weight: 650; }
 nav a { text-decoration: none; }
 .nav-cta { padding: .58rem .85rem; border: 1px solid var(--ink); border-radius: 5px; }
@@ -241,7 +241,7 @@ html[data-theme="dark"] .guide thead th { background: var(--acid); color: #17181
 @media (max-width: 600px) {
   .site-header, .hero, .section, footer { width: min(calc(100% - 2rem), var(--max)); }
   .site-header { min-height: 68px; }
-  .beta { display: none; }
+  .version-badge { display: none; }
   .nav-cta { padding: .5rem .65rem; font-size: .75rem; }
   .hero { padding-top: 4rem; }
   h1 { font-size: clamp(3rem, 15vw, 4.5rem); }
