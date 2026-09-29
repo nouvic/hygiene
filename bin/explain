@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# explain — what one rule means, what it does not mean, and what to do about it.
+#
+#   explain            list the rules
+#   explain RULE_ID    the full entry for one rule
+#
+# Read-only. The text comes from lib/rules.sh, which is the same registry the
+# scanner and the SARIF renderer read, so a rule cannot be documented one way
+# and emitted another.
+
+set -uo pipefail
+
+_hyg_d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HYG_HOME=""
+for _c in "$_hyg_d" "$_hyg_d/.."; do
+  [ -f "$_c/lib/rules.sh" ] && { HYG_HOME="$(cd "$_c" && pwd)"; break; }
+done
+[ -n "$HYG_HOME" ] || { echo "hygiene: rules library not found" >&2; exit 1; }
+. "$HYG_HOME/lib/rules.sh"
+. "$HYG_HOME/lib/patterns.sh"
+hyg_color
+
+case "${1:-}" in
+  -h|--help)
+    printf 'usage: hygiene explain [RULE_ID]\n'
+    printf 'with no argument, lists every rule id and its title.\n'
+    exit 0 ;;
+esac
+
+if [ $# -eq 0 ]; then
+  printf '%srule identifiers%s\n' "$HYG_BLD" "$HYG_OFF"
+  printf '%sIdentifiers are stable and are never reused or renumbered.%s\n\n' "$HYG_DIM" "$HYG_OFF"
+  printf '%s\n' "$HYG_RULES" | while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    printf '  %s%-14s%s %s\n' "$HYG_BLD" "$r" "$HYG_OFF" "$(hyg_rule_title "$r")"
+  done
+  printf '\n%sRun `hygiene explain RULE_ID` for one rule.%s\n' "$HYG_DIM" "$HYG_OFF"
+  exit 0
+fi
+
+if [ $# -gt 1 ]; then
+  printf 'explain: expected one rule id, got %s\n' "$#" >&2
+  exit 2
+fi
+
+RULE="$1"
+if ! hyg_rule_exists "$RULE"; then
+  printf 'explain: unknown rule: %s\n\n' "$RULE" >&2
+  printf 'known rules:\n' >&2
+  printf '%s\n' "$HYG_RULES" | sed 's/^/  /' >&2
+  exit 2
+fi
+
+printf '%s%s%s  %s\n' "$HYG_BLD" "$RULE" "$HYG_OFF" "$(hyg_rule_title "$RULE")"
+printf '%scategory %s · severity %s%s\n\n' \
+  "$HYG_DIM" "$(hyg_rule_category "$RULE")" "$(hyg_rule_severity "$RULE")" "$HYG_OFF"
+
+printf '  %swhy it matters%s\n' "$HYG_BLD" "$HYG_OFF"
+hyg_rule_why "$RULE" | sed 's/^/    /'
+printf '\n  %swhat it does not claim%s\n' "$HYG_BLD" "$HYG_OFF"
+hyg_rule_limits "$RULE" | sed 's/^/    /'
+printf '\n  %swhat to do%s\n' "$HYG_BLD" "$HYG_OFF"
+hyg_rule_remediation "$RULE" | sed 's/^/    /'
+printf '\n'
+exit 0

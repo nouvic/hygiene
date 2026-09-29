@@ -39,9 +39,10 @@ cp "$SRC/claude/stop-rulings.py" "$SRC/claude/pretooluse-hygiene.sh" \
    "$SRC/claude/pretooluse-persistence.py" \
    "$SRC/claude/pretooluse-style.py" "$SRC/claude/prompt-style.py" \
    "$SRC/claude/posttooluse-commit-failure.py" "$DEST/"
-cp "$SRC/lib/patterns.sh" "$DEST/lib/"
+cp "$SRC/lib/patterns.sh" "$SRC/lib/rules.sh" "$SRC/lib/findings.sh" \
+   "$SRC/lib/report.sh" "$DEST/lib/"
 cp "$SRC/bin/hygiene" "$SRC/bin/scan" "$SRC/bin/rulings" \
-   "$SRC/bin/memory" "$DEST/bin/"
+   "$SRC/bin/memory" "$SRC/bin/explain" "$DEST/bin/"
 cp "$SRC/VERSION" "$DEST/VERSION"
 chmod +x "$DEST/stop-rulings.py" "$DEST/pretooluse-hygiene.sh" \
          "$DEST/pretooluse-rulings.py" "$DEST/pretooluse-persistence.py" \

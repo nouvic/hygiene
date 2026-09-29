@@ -57,19 +57,41 @@ shipped stays in one place.
 
 ## P1: Interoperability and adoption
 
-- [ ] `--format text|json|sarif`, with the existing invocation unchanged.
-- [ ] A versioned JSON schema, with schema version, rule identifier, category,
+- [x] `--format text|json|sarif`, with the existing invocation unchanged.
+      `scan [path]` with no flags still prints the text report and still exits 0.
+      The format is selected by one flag; the shape of the unflagging call did
+      not change.
+- [x] A versioned JSON schema, with schema version, rule identifier, category,
       severity, file, line when available, matched evidence, explanation, and
-      remediation guidance per finding.
-- [ ] Correct escaping for arbitrary filenames and matched content.
-- [ ] SARIF that validates structurally and carries usable GitHub code locations.
-- [ ] No new required runtime for the core scanner.
-- [ ] Tests for text, JSON, and SARIF output.
-- [ ] `hygiene explain RULE_ID`.
-- [ ] A baseline workflow: `--write-baseline` and `--new --baseline`.
-- [ ] Tests for moved files, changed line numbers, removed findings, and
-      genuinely new findings.
-- [ ] Documentation of how `.hygieneignore` differs from a baseline.
+      remediation guidance per finding. `docs/formats.md` describes every field
+      and the reason `line` is `null` rather than `0` for a file-level finding.
+- [x] Correct escaping for arbitrary filenames and matched content. One escaping
+      chokepoint, `hyg_json_string`, covers JSON and SARIF both; every string in
+      either format goes through it.
+- [x] SARIF that validates structurally and carries usable GitHub code locations.
+      SARIF 2.1.0 with a driver, a rule descriptor per rule, `ruleIndex` on each
+      result, `region.startLine` and a snippet where the finding has a line, and
+      a percent-encoded `artifactLocation.uri`.
+- [x] No new required runtime for the core scanner. The scanner still uses only
+      `awk`, `sed`, `grep`, `sort`, `find`, `git`, `printf`, `wc`, `cksum`,
+      `cut`, `tr`, `basename`, and `paste` — all POSIX or already required.
+      `test/invariants` holds the network tripwire over the shipped surface.
+- [x] Tests for text, JSON, and SARIF output. `test/run` asserts the structured
+      report against the text report, so a field that disagrees with the report
+      a human reads fails the suite.
+- [x] `hygiene explain RULE_ID`. `bin/explain`, reachable as
+      `hygiene explain`. With no argument it lists the rules with their titles;
+      with an unknown identifier it prints the known ones and exits 2.
+- [x] A baseline workflow: `--write-baseline` and `--new --baseline`. Stable
+      fingerprints, never written silently, and `--new` without a baseline is an
+      error rather than a silent full report. Documented in `docs/baselines.md`.
+- [x] Tests for moved files, changed line numbers, removed findings, and
+      genuinely new findings. `test/run` covers each of the five transitions,
+      including that a moved file-level finding is re-reported once.
+- [x] Documentation of how `.hygieneignore` differs from a baseline.
+      `docs/baselines.md` compares them: an ignore is a judgement about a path,
+      a baseline is a record of what was already there, and only one of them
+      goes stale.
 
 ## P2: Context exposure
 

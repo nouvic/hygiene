@@ -13,8 +13,10 @@ baseline and every issue that mentions it.
 
 `lib/rules.sh` is the registry. It holds the identifier list and the text for
 each rule: a title, a one-sentence explanation, why the rule exists, what it
-does not establish, and safe remediation. `bin/scan` and `benchmark/run` both
-read it, so the two cannot describe a rule differently.
+does not establish, and safe remediation. `bin/scan`, `bin/explain`, and
+`benchmark/run` all read it, so no two of them can describe a rule differently.
+`hygiene explain RULE_ID` prints that text for one rule; with no argument it
+lists every rule with its title.
 
 ## The rules
 

@@ -65,6 +65,29 @@ hyg_rule_message() {
   esac
 }
 
+# A machine-readable name for the rule, for SARIF reportingDescriptor.name.
+# Letters and digits only, so it is a valid identifier in any consumer.
+hyg_rule_name() {
+  case "$1" in
+    HYG-GOV-001) printf 'GovernanceInSourceComment\n' ;;
+    HYG-ARG-001) printf 'ArgumentResidueInSourceComment\n' ;;
+    HYG-ARG-002) printf 'ArgumentResidueInRepositoryProse\n' ;;
+    HYG-PHA-001) printf 'PhantomDocumentReference\n' ;;
+    HYG-VOL-001) printf 'CommentHeavySourceFile\n' ;;
+    HYG-HIS-001) printf 'DeletedProseInGitHistory\n' ;;
+    *) printf 'UnknownRule\n' ;;
+  esac
+}
+
+# The three sections together, for a consumer that shows one block of help.
+hyg_rule_help() {
+  hyg_rule_why "$1"
+  printf '\n'
+  hyg_rule_limits "$1"
+  printf '\n'
+  hyg_rule_remediation "$1"
+}
+
 hyg_rule_why() {
   case "$1" in
     HYG-GOV-001) printf '%s\n' \

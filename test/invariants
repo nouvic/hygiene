@@ -16,15 +16,18 @@ FAIL=0
 
 # Everything that executes on a user's machine — the list a reviewer checks
 # when a change adds a new executable.
-SURFACE="bin/hygiene bin/scan bin/rulings bin/memory install install-claude uninstall
+SURFACE="bin/hygiene bin/scan bin/rulings bin/memory bin/explain install install-claude uninstall
 hooks/pre-commit hooks/commit-msg hooks/check-style
-lib/patterns.sh lib/rules.sh lib/findings.sh
+lib/patterns.sh lib/rules.sh lib/findings.sh lib/report.sh
 claude/pretooluse-hygiene.sh claude/pretooluse-rulings.py
 claude/pretooluse-persistence.py claude/posttooluse-commit-failure.py
 claude/stop-rulings.py claude/prompt-style.py claude/pretooluse-style.py"
 
 # ── 1. nothing touches the network ─────────────────────────────────────────
-NET='curl|wget|\bnc\b|ncat|telnet|/dev/tcp|urllib|http\.client|\bsocket\b|requests\.|fetch\('
+# Command names are anchored so that an ordinary word containing one does not
+# trip the wire. "truncate" holds "ncat" four characters in, and a tripwire that
+# fires on a helper name is a tripwire that gets an exemption added to it.
+NET='(^|[^[:alnum:]_])(curl|wget|nc|ncat|telnet)([^[:alnum:]_]|$)|/dev/tcp|urllib|http\.client|\bsocket\b|requests\.|fetch\('
 for f in $SURFACE; do
   [ -f "$ROOT/$f" ] || continue
   hit="$(grep -nE "$NET" "$ROOT/$f" 2>/dev/null || true)"

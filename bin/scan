@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # scan — read-only diagnostic. Reports what an agent reads before it reads your code.
-# Never writes, never fails a build. Exit status is always 0.
+# Never writes, never fails a build. Exit status is 0 for any scan that ran; 2 for a
+# usage error. The one exception to "never writes" is --write-baseline, which writes
+# only the file you name.
 #
-# usage: scan [path]
+#   scan [path]                      text report on stdout
+#   scan --format json|sarif [path]  structured report on stdout
+#   scan --write-baseline [path]     record the current findings as a baseline
+#   scan --new --baseline [path]     report only findings the baseline does not hold
 
 set -uo pipefail
 
@@ -15,10 +20,59 @@ done
 . "$HYG_HOME/lib/patterns.sh"
 . "$HYG_HOME/lib/rules.sh"
 . "$HYG_HOME/lib/findings.sh"
+. "$HYG_HOME/lib/report.sh"
 hyg_color
+HYG_VERSION="$(cat "$HYG_HOME/VERSION" 2>/dev/null || echo unknown)"
 
-ROOT="$(cd "${1:-.}" 2>/dev/null && pwd)" || { echo "no such path: ${1:-.}" >&2; exit 0; }
-cd "$ROOT" || exit 0
+usage() {
+  cat <<'USAGE'
+usage: scan [options] [path]
+
+  (no options)                     text report on stdout, writes nothing
+  --format text|json|sarif         output format. text is the default
+  --write-baseline[=path]          write the current findings to a baseline
+                                   (default: <path>/.hygiene-baseline)
+  --new                            report only findings not in the baseline
+  --baseline[=path]                the baseline to compare against
+  -h, --help                       this text
+
+A relative --baseline path resolves against the scanned path, the same way
+.hygieneignore does. --new without an existing baseline is an error, not an
+empty baseline: an unreadable baseline must not report every finding as new.
+USAGE
+}
+
+FORMAT=text; ARG_ROOT="."; ROOT_SET=0
+NEW_ONLY=0; WRITE_BASELINE=0; BASELINE=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --format)         FORMAT="${2:-}"; shift 2 ;;
+    --format=*)       FORMAT="${1#*=}"; shift ;;
+    --write-baseline) WRITE_BASELINE=1; shift ;;
+    --write-baseline=*) WRITE_BASELINE=1; BASELINE="${1#*=}"; shift ;;
+    --baseline)       BASELINE="${2:-}"; shift 2 ;;
+    --baseline=*)     BASELINE="${1#*=}"; shift ;;
+    --new)            NEW_ONLY=1; shift ;;
+    -h|--help)        usage; exit 0 ;;
+    -*)               printf 'scan: unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+    *)                if [ "$ROOT_SET" = 1 ]; then
+                        printf 'scan: unexpected argument: %s\n' "$1" >&2; exit 2
+                      fi
+                      ARG_ROOT="$1"; ROOT_SET=1; shift ;;
+  esac
+done
+
+case "$FORMAT" in
+  text|json|sarif) ;;
+  *) printf 'scan: --format must be text, json or sarif, not %s\n' "${FORMAT:-}" >&2; exit 2 ;;
+esac
+if [ "$WRITE_BASELINE" = 1 ] && [ "$NEW_ONLY" = 1 ]; then
+  printf 'scan: --write-baseline and --new cannot be used together\n' >&2; exit 2
+fi
+
+ROOT="$(cd "$ARG_ROOT" 2>/dev/null && pwd)" || { printf 'scan: no such path: %s\n' "$ARG_ROOT" >&2; exit 2; }
+cd "$ROOT" || exit 2
 
 EXTRA="$(hyg_extra_exempt "$ROOT")"
 IN_GIT=0
@@ -40,28 +94,83 @@ $(list_files | grep -Ev "$HYG_EXEMPT_PATHS")
 EOF
 
 FINDINGS="$(hyg_findings "$ROOT")"
+# History findings belong in the report as much as the rest: a rule that only
+# the text report mentioned would be missing from every structured consumer.
+if [ "$IN_GIT" = 1 ]; then
+  HIST="$(hyg_findings_history "$ROOT")"
+  [ -n "$HIST" ] && FINDINGS="$FINDINGS$HIST
+"
+fi
+ROWS="$(printf '%s\n' "$FINDINGS" | hyg_rows)"
+
+# ------------------------------------------------------------------ baseline
+BASELINE_PATH=""; BASELINE_LABEL=""; SUPPRESSED=0
+if [ "$WRITE_BASELINE" = 1 ] || [ "$NEW_ONLY" = 1 ]; then
+  if [ -n "$BASELINE" ]; then
+    case "$BASELINE" in /*) BASELINE_PATH="$BASELINE" ;; *) BASELINE_PATH="$ROOT/$BASELINE" ;; esac
+  else
+    BASELINE_PATH="$ROOT/.hygiene-baseline"
+  fi
+  case "$BASELINE_PATH" in
+    "$ROOT"/*) BASELINE_LABEL="${BASELINE_PATH#"$ROOT"/}" ;;
+    *)         BASELINE_LABEL="$BASELINE_PATH" ;;
+  esac
+fi
+
+if [ "$NEW_ONLY" = 1 ]; then
+  BASELINE_SET="$(hyg_baseline_read "$BASELINE_PATH")" || exit 2
+  KEPT=""
+  while IFS="$US" read -r rule catg sev file line match fp ev; do
+    [ -n "$rule" ] || continue
+    if printf '%s\n' "$BASELINE_SET" | grep -Fxq "$fp"; then
+      SUPPRESSED=$((SUPPRESSED + 1)); continue
+    fi
+    KEPT="$KEPT$rule$US$catg$US$sev$US$file$US$line$US$match$US$fp$US$ev
+"
+  done <<EOF
+$ROWS
+EOF
+  ROWS="$KEPT"
+fi
+
+if [ "$WRITE_BASELINE" = 1 ]; then
+  hyg_baseline_write "$BASELINE_PATH" <<EOF
+$ROWS
+EOF
+  N_ROWS=0
+  [ -n "$ROWS" ] && N_ROWS="$(printf '%s\n' "$ROWS" | wc -l | tr -d ' ')"
+  printf 'scan: wrote %s findings to %s\n' "$N_ROWS" "$BASELINE_PATH" >&2
+fi
 
 # The findings of one rule, as four fields: file, line, narrow match, whole
 # evidence line. The fields are joined with a unit separator rather than a tab
 # because a tab is IFS whitespace, and splitting on it silently collapses the
 # empty line and match fields that file-level findings carry.
-TAB="$(printf '\t')"
-US="$(printf '\037')"
 select_rule() {
-  local rec rest f ln m ev
-  while IFS= read -r rec; do
-    [ -n "$rec" ] || continue
-    [ "${rec%%"$TAB"*}" = "$1" ] || continue
-    rest="${rec#*"$TAB"}"; rest="${rest#*"$TAB"}"
-    rest="${rest#*"$TAB"}"; f="${rest%%"$TAB"*}"
-    rest="${rest#*"$TAB"}"; ln="${rest%%"$TAB"*}"
-    rest="${rest#*"$TAB"}"; m="${rest%%"$TAB"*}"
-    ev="${rest#*"$TAB"}"
+  local rule catg sev f ln m fp ev
+  while IFS="$US" read -r rule catg sev f ln m fp ev; do
+    [ "$rule" = "$1" ] || continue
     printf '%s\n' "$f$US$ln$US$m$US$ev"
   done <<EOF
-$FINDINGS
+$ROWS
 EOF
 }
+
+# Structured output replaces the text report rather than following it: a
+# document on stdout has to be the whole document.
+if [ "$FORMAT" != text ]; then
+  case "$FORMAT" in
+    json)  hyg_render_json  "$ARG_ROOT" "$BASELINE_LABEL" "$SUPPRESSED" <<EOF
+$ROWS
+EOF
+           ;;
+    sarif) hyg_render_sarif "$ARG_ROOT" "$BASELINE_LABEL" "$SUPPRESSED" <<EOF
+$ROWS
+EOF
+           ;;
+  esac
+  exit 0
+fi
 
 printf '\n%s%s%s\n' "$HYG_BLD" "  agent hygiene · $ROOT" "$HYG_OFF"
 printf '%s\n\n' "$HYG_DIM  ────────────────────────────────────────────────$HYG_OFF"
@@ -73,9 +182,9 @@ while IFS= read -r f; do
   total=$(wc -l < "$f" 2>/dev/null | tr -d ' '); [ "${total:-0}" -gt 0 ] || continue
   cmt=$(hyg_comment_lines "$f" | wc -l | tr -d ' ')
   TOT_SRC=$((TOT_SRC + total)); TOT_CMT=$((TOT_CMT + cmt))
-  [ "$total" -ge 40 ] || continue
+  [ "$total" -ge "$HYG_VOLUME_MIN_LINES" ] || continue
   pct=$(( cmt * 100 / total ))
-  [ "$pct" -ge 15 ] && DENSE="$DENSE$(printf '%3d%%  %5s lines  %s' "$pct" "$total" "$f")
+  [ "$pct" -ge "$HYG_VOLUME_PCT" ] && DENSE="$DENSE$(printf '%3d%%  %5s lines  %s' "$pct" "$total" "$f")
 "
 done <<EOF
 $SRC
@@ -134,6 +243,9 @@ echo
 
 # ─────────────────────────────────────────────── 4. phantom authority
 PH=""; PH_N=0
+# Section 7 fills these in, but only inside a Git repository. The verdict below
+# counts them, so they have to exist either way.
+DEL_F=0; DEL_L=0
 while IFS="$US" read -r f ln m ev; do
   [ -n "$f" ] || continue
   PH_N=$((PH_N + 1)); PH="$PH  $f → $m
@@ -182,22 +294,16 @@ if [ "$IN_GIT" = 1 ]; then
   echo
 
   # ───────────────────────────────────────────── 7. history contamination
-  DEL=$(git -C "$ROOT" log --diff-filter=D --name-only --format='' 2>/dev/null \
-        | grep -Ei "$HYG_DOC_EXT" | sort -u)
+  # The counts come from the same rows the structured formats carry, so the
+  # report and the JSON can never disagree about what was found.
   DEL_F=0; DEL_L=0
-  if [ -n "$DEL" ]; then
-    while IFS= read -r p; do
-      [ -n "$p" ] || continue
-      [ -e "$p" ] && continue
-      sha=$(git -C "$ROOT" rev-list -1 --all -- "$p" 2>/dev/null)
-      [ -n "$sha" ] || continue
-      n=$(git -C "$ROOT" show "$sha^:$p" 2>/dev/null | wc -l | tr -d ' ')
-      [ "${n:-0}" -gt 0 ] || n=$(git -C "$ROOT" show "$sha:$p" 2>/dev/null | wc -l | tr -d ' ')
-      DEL_F=$((DEL_F + 1)); DEL_L=$((DEL_L + ${n:-0}))
-    done <<EOF
-$DEL
+  while IFS="$US" read -r f ln m ev; do
+    [ -n "$f" ] || continue
+    DEL_F=$((DEL_F + 1))
+    DEL_L=$((DEL_L + ${ev%% *}))
+  done <<EOF
+$(select_rule HYG-HIS-001)
 EOF
-  fi
   if [ "$DEL_F" -gt 0 ]; then
     printf '  %shistory%s   %s%s lines in %s deleted documents, retrievable in one command%s\n' \
       "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$DEL_L" "$DEL_F" "$HYG_OFF"
@@ -210,8 +316,15 @@ EOF
 fi
 
 # ─────────────────────────────────────────────── verdict
-TOTAL=$((GOV_N + RES_N + PH_N))
+# Counted from the same rows the structured formats carry, so the number in the
+# text summary is the number of findings in the JSON. The per-section counters
+# above are for the headings; this is the total.
+TOTAL="$(printf '%s\n' "$ROWS" | grep -c . || true)"
 printf '%s\n' "$HYG_DIM  ────────────────────────────────────────────────$HYG_OFF"
+if [ "$NEW_ONLY" = 1 ]; then
+  printf '  %snew only%s   %s findings suppressed by %s\n' \
+    "$HYG_BLD" "$HYG_OFF" "$SUPPRESSED" "${BASELINE_LABEL:-$BASELINE_PATH}"
+fi
 if [ "$TOTAL" = 0 ] && [ "$OVERALL" -lt 15 ]; then
   printf '  %sclean.%s No matches under the current patterns and exemptions.\n\n' "$HYG_GRN" "$HYG_OFF"
 else
