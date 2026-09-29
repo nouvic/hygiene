@@ -1,0 +1,16 @@
+# Hygiene
+
+> Hygiene is a free, local, read-only scanner for stale instructions and argument residue in AI-assisted repositories. It uses explicit heuristics, Bash, and Git. It makes no model calls and sends no repository data to a service.
+
+## Primary resources
+
+- [Source and documentation](https://github.com/nouvic/hygiene)
+- [Why Hygiene exists](https://github.com/nouvic/hygiene#why-this-exists)
+- [Demonstration](https://github.com/nouvic/hygiene/blob/main/docs/demo.md)
+- [Contributing](https://github.com/nouvic/hygiene/blob/main/CONTRIBUTING.md)
+- [Security policy](https://github.com/nouvic/hygiene/blob/main/SECURITY.md)
+- [Scan feedback](https://github.com/nouvic/hygiene/issues/new?template=scan-feedback.md)
+
+## Scope
+
+Hygiene reports candidates for human review. A finding is not a verdict, and a clean scan only means the current patterns and exemptions produced no matches. The scan command writes nothing and always exits zero.

@@ -36,7 +36,9 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
+    "@graph": [{
     "@type": "SoftwareApplication",
+    "@id": "https://nouvic.github.io/hygiene/#software",
     "name": "Hygiene",
     "url": "https://nouvic.github.io/hygiene/",
     "downloadUrl": "https://github.com/nouvic/hygiene",
@@ -49,6 +51,11 @@
     "softwareRequirements": "Bash and Git",
     "license": "https://opensource.org/licenses/MIT",
     "isAccessibleForFree": true,
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
     "author": {
       "@type": "Person",
       "name": "Vicky Durel",
@@ -59,6 +66,46 @@
         "https://www.linkedin.com/in/vicky-durel/"
       ]
     }
+    }, {
+      "@type": "FAQPage",
+      "@id": "https://nouvic.github.io/hygiene/#faq",
+      "mainEntity": [{
+        "@type": "Question",
+        "name": "What is instruction residue in a repository?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Instruction residue is rule-like or decision-like prose that remains in source comments and repository documents after its original context has changed or disappeared."
+        }
+      }, {
+        "@type": "Question",
+        "name": "What does Hygiene scan?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Hygiene scans source comments and repository prose for explicit signals such as governance language, argument residue, references to missing documents, prose growth, and deleted documents recoverable from Git history."
+        }
+      }, {
+        "@type": "Question",
+        "name": "Does Hygiene send code to an AI service?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Hygiene runs locally with Bash and Git. It uses no API key, model calls, or telemetry."
+        }
+      }, {
+        "@type": "Question",
+        "name": "Does a Hygiene finding mean a comment is wrong?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Every finding is a candidate for human review, not a verdict. A clean scan only means the current patterns and exemptions produced no matches."
+        }
+      }, {
+        "@type": "Question",
+        "name": "Does a Hygiene scan modify the repository?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. The scan command is read-only, writes nothing, and always exits zero. Optional Git hooks are installed only when the user runs the separate install command."
+        }
+      }]
+    }]
   }
   </script>
 </head>
@@ -74,6 +121,7 @@
       <a href="#problem">Problem</a>
       <a href="#signals">Signals</a>
       <a href="#try-it">Try it</a>
+      <a href="#questions">Questions</a>
       <a class="nav-cta" href="https://github.com/nouvic/hygiene">View on GitHub ↗</a>
     </nav>
   </header>
@@ -208,6 +256,7 @@
           <button type="button" data-copy="git clone https://github.com/nouvic/hygiene.git\ncd hygiene\n./bin/hygiene scan /path/to/your-project">Copy</button>
         </div>
         <p class="fine-print">The scan is informational. It does not change hooks, agent settings, or project files.</p>
+        <p class="compatibility">Works on Linux and macOS with Bash and Git.</p>
       </div>
       <aside class="feedback-card">
         <p class="eyebrow"><span></span> Help test the premise</p>
@@ -218,8 +267,50 @@
       </aside>
     </section>
 
+    <section class="faq section" id="questions">
+      <div class="faq-intro">
+        <div class="section-label">05 / Clear answers</div>
+        <h2>Questions worth answering plainly.</h2>
+        <p>Hygiene is intentionally narrow. These answers define what it can establish and where human judgment begins.</p>
+      </div>
+      <div class="faq-list">
+        <article>
+          <h3>What is instruction residue?</h3>
+          <p>Rule-like or decision-like prose that remains in source comments and repository documents after its original context has changed or disappeared.</p>
+        </article>
+        <article>
+          <h3>What does Hygiene scan?</h3>
+          <p>Source comments and repository prose for explicit signals: governance language, argument residue, references to missing documents, prose growth, and deleted documents recoverable from Git history.</p>
+        </article>
+        <article>
+          <h3>Does it send code to an AI service?</h3>
+          <p>No. Hygiene runs locally with Bash and Git. It uses no API key, model calls, or telemetry.</p>
+        </article>
+        <article>
+          <h3>Does a finding mean a comment is wrong?</h3>
+          <p>No. Every finding is a candidate for human review, not a verdict. A clean scan only means the current patterns and exemptions produced no matches.</p>
+        </article>
+        <article>
+          <h3>Does a scan modify the repository?</h3>
+          <p>No. <code>scan</code> is read-only, writes nothing, and always exits zero. Optional Git hooks are installed only when you run the separate <code>install</code> command.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="origin section" aria-labelledby="origin-title">
+      <div>
+        <div class="section-label">06 / Why it exists</div>
+        <h2 id="origin-title">Built from a problem found in real repositories.</h2>
+      </div>
+      <div class="origin-copy">
+        <p>Vicky Durel built Hygiene after seeing AI-assisted work leave behind old rulings, rejected approaches, and references whose authority was no longer clear. The first release turns that observation into explicit, inspectable heuristics instead of asking another model to judge the repository.</p>
+        <p>The public beta is the next test: findings, false positives, and clean scans will show where the premise holds and where the patterns need to change.</p>
+        <a href="https://github.com/nouvic/hygiene#why-this-exists">Read why Hygiene exists ↗</a>
+      </div>
+    </section>
+
     <section class="evidence section">
-      <div class="section-label">05 / Evidence and limits</div>
+      <div class="section-label">07 / Evidence and limits</div>
       <div class="evidence-grid">
         <h2>The broader problem has evidence. This tool still needs trials.</h2>
         <div>
