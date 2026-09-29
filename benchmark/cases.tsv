@@ -1,0 +1,159 @@
+# Labeled benchmark cases. Labels are authored by hand, not derived from the
+# detector. See benchmark/README.md for what each column means.
+# id	expect	path	family	note
+ts-gov-ruling	HYG-GOV-001	src/retry.ts	typescript	an owner ruling left in a comment
+ts-gov-imperative	HYG-GOV-001	src/ledger.ts	typescript	a capitalized prohibition aimed at a future editor
+ts-gov-docref-exists	HYG-GOV-001	src/gateway.ts	typescript	a comment citing a document the repository does contain
+ts-arg-history	HYG-ARG-001	src/cache.ts	typescript	a record of a past disagreement
+ts-arg-decision	HYG-ARG-001	src/store.ts	typescript	a decision record rather than an explanation of the code
+ts-pha-missing	HYG-GOV-001,HYG-PHA-001	src/session.ts	typescript	a comment citing a document that is not in the repository
+ts-vol-dense	HYG-VOL-001	src/pricing.ts	typescript	a file that is mostly comment
+ts-clean-explain	clean	src/config-loader.ts	typescript	an ordinary comment describing what the code does
+ts-clean-invariant	clean	src/money.ts	typescript	a real technical invariant stated in prose
+ts-clean-never	clean	src/cdn.ts	typescript	a descriptive negation, not a prohibition
+ts-clean-todo	clean	src/parser.ts	typescript	an ordinary TODO
+ts-clean-test-path	clean	tests/retry.test.ts	typescript	a test file, exempt by path
+ts-clean-copy-path	clean	content/pricing-page.ts	typescript	product copy, exempt by path
+ts-clean-legal-path	clean	legal/terms.ts	typescript	legal text, exempt by path
+ts-clean-locale-path	clean	locales/de.ts	typescript	a translation, exempt by path
+ts-clean-date	clean	src/incident.ts	typescript	a dated incident description in production code
+js-gov-ruling	HYG-GOV-001	lib/queue.js	javascript	an owner ruling left in a comment
+js-gov-imperative	HYG-GOV-001	lib/billing.js	javascript	a capitalized prohibition aimed at a future editor
+js-gov-docref-exists	HYG-GOV-001	lib/router.js	javascript	a comment citing a document the repository does contain
+js-arg-history	HYG-ARG-001	lib/tokens.js	javascript	a record of a past disagreement
+js-arg-decision	HYG-ARG-001	lib/render.js	javascript	a decision record rather than an explanation of the code
+js-pha-missing	HYG-GOV-001,HYG-PHA-001	lib/session.js	javascript	a comment citing a document that is not in the repository
+js-vol-dense	HYG-VOL-001	lib/money.js	javascript	a file that is mostly comment
+js-clean-explain	clean	lib/env.js	javascript	an ordinary comment describing what the code does
+js-clean-invariant	clean	lib/keys.js	javascript	a real technical invariant stated in prose
+js-clean-never	clean	lib/assets.js	javascript	a descriptive negation, not a prohibition
+js-clean-todo	clean	lib/legacy.js	javascript	an ordinary TODO
+js-clean-test-path	clean	__tests__/keys.js	javascript	a test file, exempt by path
+js-clean-copy-path	clean	content/landing.js	javascript	product copy, exempt by path
+js-clean-legal-path	clean	legal/privacy.js	javascript	legal text, exempt by path
+js-clean-locale-path	clean	i18n/es.js	javascript	a translation, exempt by path
+js-clean-date	clean	lib/metrics.js	javascript	a dated incident description in production code
+py-gov-ruling	HYG-GOV-001	app/retry.py	python	an owner ruling left in a comment
+py-gov-imperative	HYG-GOV-001	app/ledger.py	python	a capitalized prohibition aimed at a future editor
+py-gov-docref-exists	HYG-GOV-001	app/gateway.py	python	a comment citing a document the repository does contain
+py-arg-history	HYG-ARG-001	app/cache.py	python	a record of a past disagreement
+py-arg-decision	HYG-ARG-001	app/store.py	python	a decision record rather than an explanation of the code
+py-pha-missing	HYG-GOV-001,HYG-PHA-001	app/session.py	python	a comment citing a document that is not in the repository
+py-vol-dense	HYG-VOL-001	app/pricing.py	python	a file that is mostly comment
+py-clean-explain	clean	app/config_loader.py	python	an ordinary comment describing what the code does
+py-clean-invariant	clean	app/money.py	python	a real technical invariant stated in prose
+py-clean-never	clean	app/cdn.py	python	a descriptive negation, not a prohibition
+py-clean-todo	clean	app/parser.py	python	an ordinary TODO
+py-clean-test-path	clean	tests/test_retry.py	python	a test file, exempt by path
+py-clean-copy-path	clean	content/pricing_page.py	python	product copy, exempt by path
+py-clean-legal-path	clean	legal/terms.py	python	legal text, exempt by path
+py-clean-locale-path	clean	locales/fr.py	python	a translation, exempt by path
+py-clean-date	clean	app/incident.py	python	a dated incident description in production code
+go-gov-ruling	HYG-GOV-001	internal/queue/queue.go	go	an owner ruling left in a comment
+go-gov-imperative	HYG-GOV-001	internal/ledger/ledger.go	go	a capitalized prohibition aimed at a future editor
+go-gov-docref-exists	HYG-GOV-001	internal/gateway/gateway.go	go	a comment citing a document the repository does contain
+go-arg-history	HYG-ARG-001	internal/cache/cache.go	go	a record of a past disagreement
+go-arg-decision	HYG-ARG-001	internal/store/store.go	go	a decision record rather than an explanation of the code
+go-pha-missing	HYG-GOV-001,HYG-PHA-001	internal/session/session.go	go	a comment citing a document that is not in the repository
+go-vol-dense	HYG-VOL-001	internal/pricing/pricing.go	go	a file that is mostly comment
+go-clean-explain	clean	internal/config/config.go	go	an ordinary comment describing what the code does
+go-clean-invariant	clean	internal/money/money.go	go	a real technical invariant stated in prose
+go-clean-never	clean	internal/assets/assets.go	go	a descriptive negation, not a prohibition
+go-clean-todo	clean	internal/parser/parser.go	go	an ordinary TODO
+go-clean-test-path	clean	internal/queue/testdata/queue_spec.go	go	a test fixture, exempt by path
+go-clean-copy-path	clean	content/landing.go	go	product copy, exempt by path
+go-clean-legal-path	clean	legal/terms.go	go	legal text, exempt by path
+go-clean-locale-path	clean	locales/de.go	go	a translation, exempt by path
+go-clean-date	clean	internal/metrics/metrics.go	go	a dated incident description in production code
+rs-gov-ruling	HYG-GOV-001	src/queue.rs	rust	an owner ruling left in a comment
+rs-gov-imperative	HYG-GOV-001	src/ledger.rs	rust	a capitalized prohibition aimed at a future editor
+rs-gov-docref-exists	HYG-GOV-001	src/gateway.rs	rust	a comment citing a document the repository does contain
+rs-arg-history	HYG-ARG-001	src/cache.rs	rust	a record of a past disagreement
+rs-arg-decision	HYG-ARG-001	src/store.rs	rust	a decision record rather than an explanation of the code
+rs-pha-missing	HYG-GOV-001,HYG-PHA-001	src/session.rs	rust	a comment citing a document that is not in the repository
+rs-vol-dense	HYG-VOL-001	src/pricing.rs	rust	a file that is mostly comment
+rs-clean-explain	clean	src/config.rs	rust	an ordinary comment describing what the code does
+rs-clean-invariant	clean	src/money.rs	rust	a real technical invariant stated in prose
+rs-clean-never	clean	src/assets.rs	rust	a descriptive negation, not a prohibition
+rs-clean-todo	clean	src/parser.rs	rust	an ordinary TODO
+rs-clean-test-path	clean	tests/queue.rs	rust	a test file, exempt by path
+rs-clean-copy-path	clean	content/landing.rs	rust	product copy, exempt by path
+rs-clean-legal-path	clean	legal/terms.rs	rust	legal text, exempt by path
+rs-clean-locale-path	clean	locales/de.rs	rust	a translation, exempt by path
+rs-clean-date	clean	src/metrics.rs	rust	a dated incident description in production code
+java-gov-ruling	HYG-GOV-001	src/main/java/app/Queue.java	java	an owner ruling left in a comment
+java-gov-imperative	HYG-GOV-001	src/main/java/app/Ledger.java	java	a capitalized prohibition aimed at a future editor
+java-gov-docref-exists	HYG-GOV-001	src/main/java/app/Gateway.java	java	a comment citing a document the repository does contain
+java-arg-history	HYG-ARG-001	src/main/java/app/Cache.java	java	a record of a past disagreement
+java-arg-decision	HYG-ARG-001	src/main/java/app/Store.java	java	a decision record rather than an explanation of the code
+java-pha-missing	HYG-GOV-001,HYG-PHA-001	src/main/java/app/Session.java	java	a comment citing a document that is not in the repository
+java-vol-dense	HYG-VOL-001	src/main/java/app/Pricing.java	java	a file that is mostly comment
+java-clean-explain	clean	src/main/java/app/Config.java	java	an ordinary comment describing what the code does
+java-clean-invariant	clean	src/main/java/app/Money.java	java	a real technical invariant stated in prose
+java-clean-never	clean	src/main/java/app/Assets.java	java	a descriptive negation, not a prohibition
+java-clean-todo	clean	src/main/java/app/Parser.java	java	an ordinary TODO
+java-clean-test-path	clean	src/test/java/app/QueueTest.java	java	a test file, exempt by path
+java-clean-copy-path	clean	content/Landing.java	java	product copy, exempt by path
+java-clean-legal-path	clean	legal/Terms.java	java	legal text, exempt by path
+java-clean-locale-path	clean	locales/De.java	java	a translation, exempt by path
+java-clean-date	clean	src/main/java/app/Metrics.java	java	a dated incident description in production code
+rb-gov-ruling	HYG-GOV-001	lib/queue.rb	ruby	an owner ruling left in a comment
+rb-gov-imperative	HYG-GOV-001	lib/ledger.rb	ruby	a capitalized prohibition aimed at a future editor
+rb-gov-docref-exists	HYG-GOV-001	lib/gateway.rb	ruby	a comment citing a document the repository does contain
+rb-arg-history	HYG-ARG-001	lib/cache.rb	ruby	a record of a past disagreement
+rb-arg-decision	HYG-ARG-001	lib/store.rb	ruby	a decision record rather than an explanation of the code
+rb-pha-missing	HYG-GOV-001,HYG-PHA-001	lib/session.rb	ruby	a comment citing a document that is not in the repository
+rb-vol-dense	HYG-VOL-001	lib/pricing.rb	ruby	a file that is mostly comment
+rb-clean-explain	clean	lib/config.rb	ruby	an ordinary comment describing what the code does
+rb-clean-invariant	clean	lib/money.rb	ruby	a real technical invariant stated in prose
+rb-clean-never	clean	lib/assets.rb	ruby	a descriptive negation, not a prohibition
+rb-clean-todo	clean	lib/parser.rb	ruby	an ordinary TODO
+rb-clean-test-path	clean	test/queue_test.rb	ruby	a test file, exempt by path
+rb-clean-copy-path	clean	content/landing.rb	ruby	product copy, exempt by path
+rb-clean-legal-path	clean	legal/terms.rb	ruby	legal text, exempt by path
+rb-clean-locale-path	clean	locales/de.rb	ruby	a translation, exempt by path
+rb-clean-date	clean	lib/metrics.rb	ruby	a dated incident description in production code
+sh-gov-ruling	HYG-GOV-001	scripts/queue.sh	shell	an owner ruling left in a comment
+sh-gov-imperative	HYG-GOV-001	scripts/ledger.sh	shell	a capitalized prohibition aimed at a future editor
+sh-gov-docref-exists	HYG-GOV-001	scripts/gateway.sh	shell	a comment citing a document the repository does contain
+sh-arg-history	HYG-ARG-001	scripts/cache.sh	shell	a record of a past disagreement
+sh-arg-decision	HYG-GOV-001,HYG-ARG-001	scripts/store.sh	shell	a closed decision record: the detector reads both the ruling and the residue in it
+sh-pha-missing	HYG-GOV-001,HYG-PHA-001	scripts/session.sh	shell	a comment citing a document that is not in the repository
+sh-vol-dense	HYG-VOL-001	scripts/deploy.sh	shell	a file that is mostly comment
+sh-clean-explain	clean	scripts/config.sh	shell	an ordinary comment describing what the code does
+sh-clean-invariant	clean	scripts/money.sh	shell	a real technical invariant stated in prose
+sh-clean-never	clean	scripts/assets.sh	shell	a descriptive negation, not a prohibition
+sh-clean-todo	clean	scripts/parser.sh	shell	an ordinary TODO
+sh-clean-test-path	clean	test/queue.sh	shell	a test file, exempt by path
+sh-clean-copy-path	clean	content/landing.sh	shell	product copy, exempt by path
+sh-clean-legal-path	clean	legal/terms.sh	shell	legal text, exempt by path
+sh-clean-locale-path	clean	locales/de.sh	shell	a translation, exempt by path
+sh-clean-date	clean	scripts/metrics.sh	shell	a dated incident description in production code
+yml-gov-ruling	HYG-GOV-001	ci/workflows/queue.yml	yaml	an owner ruling left in a comment
+yml-gov-imperative	HYG-GOV-001	ci/workflows/ledger.yml	yaml	a capitalized prohibition aimed at a future editor
+yml-gov-docref-exists	HYG-GOV-001	ci/workflows/gateway.yml	yaml	a comment citing a document the repository does contain
+yml-arg-history	HYG-ARG-001	config/cache.yml	yaml	a record of a past disagreement
+yml-arg-decision	HYG-ARG-001	config/store.yml	yaml	a decision record rather than an explanation of the code
+yml-pha-missing	HYG-GOV-001,HYG-PHA-001	config/session.yml	yaml	a comment citing a document that is not in the repository
+yml-vol-dense	HYG-VOL-001	config/pricing.yml	yaml	a file that is mostly comment
+yml-clean-explain	clean	config/config.yml	yaml	an ordinary comment describing what the code does
+yml-clean-invariant	clean	config/money.yml	yaml	a real technical invariant stated in prose
+yml-clean-never	clean	config/assets.yml	yaml	a descriptive negation, not a prohibition
+yml-clean-todo	clean	config/parser.yml	yaml	an ordinary TODO
+yml-clean-test-path	clean	tests/fixtures/queue.yml	yaml	a test fixture, exempt by path
+yml-clean-copy-path	clean	content/landing.yml	yaml	product copy, exempt by path
+yml-clean-legal-path	clean	legal/terms.yml	yaml	legal text, exempt by path
+yml-clean-locale-path	clean	locales/de.yml	yaml	a translation, exempt by path
+yml-clean-date	clean	config/metrics.yml	yaml	a dated incident description in production code
+md-arg-discussion	HYG-ARG-002	docs/HISTORY.md	markdown	repository prose recording a past disagreement
+md-arg-correction	HYG-ARG-002	docs/PROCESS.md	markdown	repository prose recording a correction
+md-arg-reversal	HYG-ARG-002	docs/DECISIONS.md	markdown	repository prose recording a reversal
+md-clean-architecture	clean	docs/ARCHITECTURE.md	markdown	a document that other fixtures cite, so the phantom reference check has a real target
+md-clean-agent-instructions	clean	AGENTS.md	markdown	agent instructions that are current and carry no argument residue
+md-clean-readme	clean	README.md	markdown	an ordinary project readme
+md-clean-changelog	clean	CHANGELOG.md	markdown	a changelog made of dates and releases
+md-clean-troubleshooting	clean	docs/TROUBLESHOOTING.md	markdown	ordinary operator documentation
+md-clean-boundary	clean	docs/GOVERNANCE.md	markdown	governance-shaped prose in a document: the scanner reports this only for source comments, so a reviewer marks it clean here
+md-clean-spec	clean	docs/DESIGN.md	markdown	a design document that describes an alternative a reviewer ruled out
+md-clean-glossary	clean	docs/GLOSSARY.md	markdown	a glossary
+md-clean-runbook	clean	docs/RUNBOOK.md	markdown	a runbook with dates and an incident description

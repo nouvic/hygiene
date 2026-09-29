@@ -57,6 +57,11 @@ HYG_GOV_CI="$HYG_IMPERATIVE|$HYG_AUTHORITY|$HYG_PROCESS|$HYG_DOCREF"
 HYG_RESIDUE='owner[[:space:]]+(corrected|rejected|struck|overruled|flagged|caught|had to)|(stated|said|corrected|repeated|told)[[:space:]]+(it[[:space:]]+)?(twice|three times|3 times|for the [a-z]+ time)|(second|third|fourth|fifth|tenth|3rd|4th)[[:space:]]+time|was[[:space:]]+(rejected|superseded|reversed|overruled)|(he|she|they|the owner)[[:space:]]+had[[:space:]]+to|recurred[[:space:]]+across|cost[[:space:]]+(him|her|them|us)[[:space:]]+(a|his|her|their)[[:space:]]+day|re-?litigat|so[[:space:]]+it[[:space:]]+is[[:space:]]+not[[:space:]]+(proposed|raised|reopened)|(the[[:space:]]+)?(user|owner|client)[[:space:]]+(wanted|asked|preferred|rejected|refused|corrected|decided|agreed|insisted|objected|overruled)|(^|[^a-z])(i|we|the agent|the assistant|claude)[[:space:]]+(argued|refused|pushed back|convinced|disagreed)|we[[:space:]]+(eventually[[:space:]]+|finally[[:space:]]+)?(agreed|decided|settled|concluded)|(after|during|in)[[:space:]]+(the[[:space:]]+|this[[:space:]]+|our[[:space:]]+)?(argument|discussion|conversation|session|debate)'
 
 # ---------------------------------------------------------- commit subjects
+# A source file is worth looking at when it carries this much comment, and it
+# has enough lines for the proportion to mean anything.
+HYG_VOLUME_MIN_LINES=40
+HYG_VOLUME_PCT=15
+
 HYG_CONVENTIONAL='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9 ._/-]+\))?!?: .+'
 HYG_COMMIT_BANNED='^(handoff|hand-off|wip|session|notes?|context|state|checkpoint|save|progress|misc|stuff)\b'
 

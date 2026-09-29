@@ -13,6 +13,8 @@ for _c in "$_hyg_d" "$_hyg_d/.."; do
 done
 [ -n "$HYG_HOME" ] || { echo "hygiene: patterns library not found" >&2; exit 0; }
 . "$HYG_HOME/lib/patterns.sh"
+. "$HYG_HOME/lib/rules.sh"
+. "$HYG_HOME/lib/findings.sh"
 hyg_color
 
 ROOT="$(cd "${1:-.}" 2>/dev/null && pwd)" || { echo "no such path: ${1:-.}" >&2; exit 0; }
@@ -22,11 +24,7 @@ EXTRA="$(hyg_extra_exempt "$ROOT")"
 IN_GIT=0
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 && IN_GIT=1
 
-list_files() {
-  if [ "$IN_GIT" = 1 ]; then git -C "$ROOT" ls-files --cached --others --exclude-standard | sort -u
-  else find . -type f | sed 's|^\./||'
-  fi
-}
+list_files() { hyg_list_files "$ROOT"; }
 
 SRC=""; DOCS=""
 while IFS= read -r f; do
@@ -40,6 +38,30 @@ while IFS= read -r f; do
 done <<EOF
 $(list_files | grep -Ev "$HYG_EXEMPT_PATHS")
 EOF
+
+FINDINGS="$(hyg_findings "$ROOT")"
+
+# The findings of one rule, as four fields: file, line, narrow match, whole
+# evidence line. The fields are joined with a unit separator rather than a tab
+# because a tab is IFS whitespace, and splitting on it silently collapses the
+# empty line and match fields that file-level findings carry.
+TAB="$(printf '\t')"
+US="$(printf '\037')"
+select_rule() {
+  local rec rest f ln m ev
+  while IFS= read -r rec; do
+    [ -n "$rec" ] || continue
+    [ "${rec%%"$TAB"*}" = "$1" ] || continue
+    rest="${rec#*"$TAB"}"; rest="${rest#*"$TAB"}"
+    rest="${rest#*"$TAB"}"; f="${rest%%"$TAB"*}"
+    rest="${rest#*"$TAB"}"; ln="${rest%%"$TAB"*}"
+    rest="${rest#*"$TAB"}"; m="${rest%%"$TAB"*}"
+    ev="${rest#*"$TAB"}"
+    printf '%s\n' "$f$US$ln$US$m$US$ev"
+  done <<EOF
+$FINDINGS
+EOF
+}
 
 printf '\n%s%s%s\n' "$HYG_BLD" "  agent hygiene · $ROOT" "$HYG_OFF"
 printf '%s\n\n' "$HYG_DIM  ────────────────────────────────────────────────$HYG_OFF"
@@ -71,15 +93,13 @@ echo
 
 # ─────────────────────────────────────────────── 2. governance in comments
 GOV=""; GOV_N=0
-while IFS= read -r f; do
+while IFS="$US" read -r f ln m ev; do
   [ -n "$f" ] || continue
-  hits=$(hyg_comment_lines "$f" | hyg_match_governance)
-  [ -n "$hits" ] || continue
-  n=$(printf '%s\n' "$hits" | wc -l | tr -d ' '); GOV_N=$((GOV_N + n))
-  GOV="$GOV$(printf '%s\n' "$hits" | sed "s|^|$f:|")
+  GOV_N=$((GOV_N + 1))
+  GOV="$GOV$f:$ln:$ev
 "
 done <<EOF
-$SRC
+$(select_rule HYG-GOV-001)
 EOF
 
 if [ "$GOV_N" -gt 0 ]; then
@@ -94,24 +114,14 @@ echo
 
 # ─────────────────────────────────────────────── 3. argument residue
 RES_N=0; RES=""
-while IFS= read -r f; do
+while IFS="$US" read -r f ln m ev; do
   [ -n "$f" ] || continue
-  hits=$(hyg_comment_lines "$f" | grep -Ei "$HYG_RESIDUE" 2>/dev/null)
-  [ -n "$hits" ] || continue
-  RES_N=$((RES_N + $(printf '%s\n' "$hits" | wc -l | tr -d ' ')))
-  RES="$RES$(printf '%s\n' "$hits" | sed "s|^|$f:|")
+  RES_N=$((RES_N + 1))
+  RES="$RES$f:$ln:$ev
 "
 done <<EOF
-$SRC
+$(select_rule HYG-ARG-001; select_rule HYG-ARG-002)
 EOF
-for d in $DOCS; do
-  [ -f "$d" ] || continue
-  hits=$(grep -nEi "$HYG_RESIDUE" "$d" 2>/dev/null)
-  [ -n "$hits" ] || continue
-  RES_N=$((RES_N + $(printf '%s\n' "$hits" | wc -l | tr -d ' ')))
-  RES="$RES$(printf '%s\n' "$hits" | sed "s|^|$d:|")
-"
-done
 
 if [ "$RES_N" -gt 0 ]; then
   printf '  %sargument residue%s   %s%s lines%s — records of past disagreements\n' \
@@ -124,23 +134,12 @@ echo
 
 # ─────────────────────────────────────────────── 4. phantom authority
 PH=""; PH_N=0
-while IFS= read -r f; do
+while IFS="$US" read -r f ln m ev; do
   [ -n "$f" ] || continue
-  refs=$(hyg_comment_lines "$f" | grep -oE "$HYG_DOCREF" 2>/dev/null | sed -E 's/[^A-Za-z0-9]+$//' | sort -u)
-  for r in $refs; do
-    [ -n "$r" ] || continue
-    [ -e "$r" ] && continue
-    base="$(basename "$r")"
-    if [ "$IN_GIT" = 1 ]; then
-      git -C "$ROOT" ls-files | grep -qi "/$base\$\|^$base\$" && continue
-    else
-      find . -name "$base" -print -quit 2>/dev/null | grep -q . && continue
-    fi
-    PH_N=$((PH_N + 1)); PH="$PH  $f → $r
+  PH_N=$((PH_N + 1)); PH="$PH  $f → $m
 "
-  done
 done <<EOF
-$SRC
+$(select_rule HYG-PHA-001)
 EOF
 
 if [ "$PH_N" -gt 0 ]; then

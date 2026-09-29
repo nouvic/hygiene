@@ -589,6 +589,42 @@ check "Claude hook still blocks a warning glyph in a comment banner" \
 # own refusal, so it has to judge the same lines.
 
 echo
+echo "  ── labeled benchmark ───────────────────────────────────"
+# The corpus is hand-labeled, so these checks are about the corpus and the
+# harness rather than about the detector. The detector itself is measured by
+# the benchmark, not asserted here.
+BM="$HYG/benchmark"
+. "$HYG/lib/rules.sh"
+UNKNOWN="$(awk -F'\t' '/^#/ || NF < 3 { next }
+    { n = split($2, a, ","); for (i = 1; i <= n; i++)
+        if (a[i] != "" && a[i] != "clean") print a[i] }' "$BM/cases.tsv" \
+  | sort -u | while IFS= read -r r; do
+      printf '%s\n' "$HYG_RULES" | grep -qx "$r" || printf '%s\n' "$r"; done)"
+check "every labeled rule is registered" "$UNKNOWN" ""
+N="$(awk -F'\t' '/^#/ || NF < 3 { next } { n++ } END { print n + 0 }' "$BM/cases.tsv")"
+check "the corpus is at least 120 cases" "$([ "$N" -ge 120 ] && printf yes || printf no)" yes
+MISSING="$(awk -F'\t' '/^#/ || NF < 3 { next } { print $3 }' "$BM/cases.tsv" | sort -u \
+  | while IFS= read -r p; do [ -f "$BM/cases/$p" ] || printf '%s\n' "$p"; done)"
+check "every labeled case has a fixture" "$MISSING" ""
+
+"$BM/run" >/dev/null 2>&1
+check "the benchmark meets the release gate" "$?" 0
+"$BM/run" --format md > "$TMP/bench.md" 2>/dev/null
+diff -q "$TMP/bench.md" "$BM/RESULTS.md" >/dev/null 2>&1
+check "the published result is generated, not edited" "$?" 0
+check "CI runs the benchmark" "$(grep -c '\./benchmark/run' "$HYG/.github/workflows/ci.yml")" 1
+
+# A label the corpus does not support has to fail the gate, or the gate is
+# decoration. The tampered copy keeps the detector and changes only labels.
+TAMBM="$TMP/bmroot"; guard "$TAMBM"; mkdir -p "$TAMBM"
+cp -R "$BM" "$TAMBM/benchmark"; ln -s "$HYG/lib" "$TAMBM/lib"
+awk -F'\t' -v OFS='\t' '/^#/ || NF < 3 { print; next }
+  $2 == "HYG-GOV-001" { $2 = "HYG-PHA-001" } { print }' \
+  "$BM/cases.tsv" > "$TAMBM/benchmark/cases.tsv"
+"$TAMBM/benchmark/run" >/dev/null 2>&1
+check "labels the corpus does not support fail the gate" "$?" 1
+
+echo
 echo "  ── invariants ──────────────────────────────────────────"
 "$HYG/test/invariants" >/dev/null 2>&1
 check "the shipped tree holds its invariants" "$?" 0

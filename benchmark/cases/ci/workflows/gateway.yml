@@ -1,0 +1,3 @@
+# See docs/ARCHITECTURE.md for the module map this workflow follows.
+name: gateway
+on: push

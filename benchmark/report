@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# benchmark/report: regenerate benchmark/RESULTS.md from the corpus.
+#
+#   benchmark/report
+#
+# The file is generated, never edited. Every number in it comes from
+# benchmark/run, so the published result and the CI gate cannot drift apart.
+# The run is reproducible: the same corpus and the same detector produce the
+# same bytes, which is what lets a review diff the file.
+
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if "$HERE/run" --format md > "$HERE/RESULTS.md.tmp"; then
+  mv "$HERE/RESULTS.md.tmp" "$HERE/RESULTS.md"
+  printf 'benchmark: wrote %s (gate passed)\n' "$HERE/RESULTS.md"
+else
+  mv "$HERE/RESULTS.md.tmp" "$HERE/RESULTS.md"
+  printf 'benchmark: wrote %s, but the gate FAILED\n' "$HERE/RESULTS.md" >&2
+  exit 1
+fi

@@ -25,5 +25,11 @@ jobs:
         run: ./test/run
       - name: static invariants
         run: ./test/invariants
+      - name: detector benchmark
+        run: ./benchmark/run
+      - name: published benchmark result is current
+        run: |
+          ./benchmark/report
+          git diff --exit-code -- benchmark/RESULTS.md
       - name: self-scan reports clean
         run: ./bin/scan . | grep -q 'clean\.'

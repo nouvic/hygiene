@@ -1,0 +1,45 @@
+# The pricing configuration keeps every rule in one place.
+#
+# Every rule is a pure function of the order and the account.
+# The order of the rules matters, because a later rule overrides an
+# earlier one, and the list is walked from the front.
+#
+# Rounding happens once, at the end, on the final amount.
+# Intermediate values keep full precision so that rounding is never
+# applied twice in the same pass.
+#
+# Currencies without minor units still go through the same path, with a
+# scale of zero, so the callers do not need a special case.
+#
+# Discounts are applied before tax, and tax is computed on the
+# discounted amount.
+#
+# The file does not name a host, a port, or a credential.
+# Everything that reaches a network is supplied by the caller.
+#
+# Reloading the file is cheap, so the reader parses it on every call.
+#
+# A rule that does nothing is valid, and is used for the disabled cases.
+rules: []
+#
+# The scale is the number of minor units, two for most currencies.
+scale:
+  USD: 2
+  JPY: 0
+#
+# The currency code travels on the order, not on this file.
+default_currency: USD
+#
+# Amounts are always integers, and the floor is zero.
+zero: 0
+#
+# The largest amount the storage layer can hold without losing precision.
+max: 9007199254740991
+#
+# Every key in this file is listed here so the surface stays small.
+surface:
+  - rules
+  - scale
+  - default_currency
+  - zero
+  - max
