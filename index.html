@@ -8,7 +8,14 @@
   <meta name="author" content="Vicky Durel">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
   <meta name="theme-color" content="#171815">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const savedTheme = localStorage.getItem('hygiene-theme');
+      const preferredTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = savedTheme || preferredTheme;
+    } catch (_) {}
+  </script>
   <meta property="og:title" content="Hygiene: Find Stale Instructions in AI-Assisted Repositories">
   <meta property="og:description" content="A free, local scanner for instruction residue in source comments and repository prose. No API keys, model calls, or telemetry.">
   <meta property="og:type" content="website">

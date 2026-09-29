@@ -12,6 +12,18 @@
   --max: 1240px;
 }
 
+html[data-theme="dark"] {
+  --paper: #11130f;
+  --paper-deep: #191c16;
+  --ink: #f2f0e7;
+  --muted: #b1b5aa;
+  --line: #3a3e35;
+  --acid: #cffa52;
+  --acid-deep: #a8d52f;
+  --orange: #ff7a52;
+  --terminal: #080a07;
+}
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body {
@@ -23,6 +35,25 @@ body {
   line-height: 1.6;
   text-rendering: optimizeLegibility;
 }
+.theme-toggle {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 90;
+  min-width: 92px;
+  padding: .68rem .82rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 8px 28px rgba(0,0,0,.18);
+  cursor: pointer;
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.theme-toggle:hover { transform: translateY(-2px); }
+.theme-toggle:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
 a { color: inherit; text-underline-offset: .22em; }
 .skip-link { position: fixed; left: 1rem; top: -5rem; z-index: 100; background: var(--ink); color: white; padding: .7rem 1rem; }
 .skip-link:focus { top: 1rem; }
@@ -174,6 +205,25 @@ footer p:last-child { text-align: right; }
 .guide pre { overflow-x: auto; padding: 1.4rem; background: var(--terminal); color: var(--white); border-radius: 8px; line-height: 1.7; }
 .guide-cta { margin-top: 5rem; padding: 2.5rem; background: var(--acid); border-radius: 10px; }
 .guide-cta h2 { margin-bottom: .7rem; font-size: 2.2rem; }
+
+html[data-theme="dark"] .eyebrow,
+html[data-theme="dark"] .lede,
+html[data-theme="dark"] .body-copy,
+html[data-theme="dark"] .flow-arrow,
+html[data-theme="dark"] .guide-lede { color: #c3c7bc; }
+html[data-theme="dark"] .residue-flow > div:not(.flow-arrow),
+html[data-theme="dark"] .guide table { background: rgba(255,255,255,.035); }
+html[data-theme="dark"] .boundary-card { background: #080a07; }
+html[data-theme="dark"] .button.primary { background: var(--acid); color: #171815; border-color: var(--acid); }
+html[data-theme="dark"] .symptom-grid code,
+html[data-theme="dark"] .faq-list code { color: var(--acid); }
+html[data-theme="dark"] .diagnostic-boundary,
+html[data-theme="dark"] .signal-grid .principle,
+html[data-theme="dark"] .feedback-card,
+html[data-theme="dark"] .origin,
+html[data-theme="dark"] .answer-box,
+html[data-theme="dark"] .guide-cta { color: #171815; }
+html[data-theme="dark"] .guide thead th { background: var(--acid); color: #171815; }
 
 @media (max-width: 900px) {
   nav > a:not(.nav-cta) { display: none; }

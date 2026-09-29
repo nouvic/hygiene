@@ -7,6 +7,15 @@
   <meta name="description" content="Learn why an AI coding agent may follow old instructions, how context rot differs from repository instruction residue, and what Hygiene can actually diagnose.">
   <meta name="author" content="Vicky Durel">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="theme-color" content="#171815">
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const savedTheme = localStorage.getItem('hygiene-theme');
+      const preferredTheme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.dataset.theme = savedTheme || preferredTheme;
+    } catch (_) {}
+  </script>
   <link rel="canonical" href="https://nouvic.github.io/hygiene/guides/context-rot-and-instruction-residue/">
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../styles.css">
@@ -96,5 +105,6 @@ cd hygiene
     </article>
   </main>
   <footer><a class="brand" href="../../"><img class="brand-mark" src="../../logo.svg" width="36" height="36" alt=""><span>Hygiene</span></a><p>Made with ❤️ and care by <a href="https://github.com/nouvic">Vicky Durel</a> ✨</p><p><a href="https://github.com/nouvic/hygiene">Source</a></p></footer>
+  <script src="../../script.js"></script>
 </body>
 </html>
