@@ -32,7 +32,7 @@ capabilities pages change; follow the projects for their current state.
 | Runtime | Bash, Git, standard Unix utilities | Node, single self-contained bundle | Rust binary, also published to npm, Homebrew, pip, and Cargo |
 | Network, keys, model | None; the scan is local and deterministic | No API key or model documented; `npx` fetches the package | No network, API key, or model documented for the linter |
 | Writes | Never to the scanned tree; only a baseline or report you name | Reporting by default; `--fix`, `init`, and the `ctxlint_fix` MCP tool write | Reporting by default; `--fix`, `--fix-safe`, `--fix-unsafe` write |
-| Report formats | text, JSON, SARIF | text, JSON, SARIF | includes `--format github` |
+| Report formats | text, JSON, SARIF | text, JSON, SARIF | terminal, GitHub annotations, SARIF |
 | Strict mode | `--strict` exits 1 on a warning finding | `--strict`; non-strict always exits 0 | `--strict` |
 | Editor and CI integration | GitHub Action, Git hooks | GitHub Action, pre-commit, MCP server, seven MCP tools | GitHub Action, VS Code, JetBrains, Neovim, Zed, web playground |
 
@@ -59,10 +59,10 @@ measurement, and no project was installed or run to write it.
 | Git history | Partial (reports prose deleted from the tree that remains retrievable; no path repair) | Partial (documents Git history for `--fix` path repair and rename detection) | Not currently supported |
 | Agent configuration schemas: hooks, MCP configs, frontmatter | Outside scope | Supported (MCP configs, frontmatter) | Supported (hooks, MCP configs, per-tool config files) |
 | Session data | Outside scope | Supported (reading sessions is opt-in because it leaves the project tree) | Not currently supported |
-| Memory data | Partial (gating lives in the optional Claude layer, not in the scan) | Supported (staleness, duplication, caps) | Not currently supported |
+| Memory data | Partial (gating lives in the optional Claude layer, not in the scan) | Supported (staleness, duplication, caps) | Partial (validates Claude memory and instruction files with `CC-MEM-*` rules; no session or autonomous memory-store audit is documented) |
 | Deterministic and offline operation | Supported (Bash and Git; `./test/invariants` fails the build if a network primitive enters the executable surface) | Partial (no model call or network access documented for the checks; no determinism statement published, and `npx` fetches the package) | Partial (no model call or network access documented for the linter; no determinism statement published) |
 | Runs with no runtime beyond the OS, Bash, and Git | Supported | Not currently supported (Node) | Not currently supported (a Rust binary, with npm, Homebrew, pip, Cargo, and prebuilt distributions) |
-| Emits a structured document | Supported (JSON, SARIF) | Supported (JSON, SARIF) | Partial (path, line, column by default and `--format github`; JSON and SARIF are not documented in the retrieved sources) |
+| Emits a structured document | Supported (JSON, SARIF) | Supported (JSON, SARIF) | Partial (SARIF is supported; JSON output is not documented in the retrieved sources) |
 | Rewrites files (autofix) | Not currently supported (a comment is a human judgement, so nothing is rewritten) | Supported (`--fix`, `--fix-dry-run`) | Supported (`--fix`, `--fix-safe`, `--fix-unsafe`) |
 | Enforces at commit or CI time | Supported (Git hooks, GitHub Action) | Supported (pre-commit, GitHub Action) | Supported (pre-commit, GitHub Action) |
 
