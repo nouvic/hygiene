@@ -1,0 +1,14 @@
+{
+  "name": "Hygiene",
+  "short_name": "Hygiene",
+  "description": "A local scanner for stale instructions and argument residue in AI-assisted repositories.",
+  "start_url": "/hygiene/",
+  "scope": "/hygiene/",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#171815",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}
