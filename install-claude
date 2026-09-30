@@ -39,8 +39,8 @@ cp "$SRC/claude/stop-rulings.py" "$SRC/claude/pretooluse-hygiene.sh" \
    "$SRC/claude/pretooluse-persistence.py" \
    "$SRC/claude/pretooluse-style.py" "$SRC/claude/prompt-style.py" \
    "$SRC/claude/posttooluse-commit-failure.py" "$DEST/"
-cp "$SRC/lib/patterns.sh" "$SRC/lib/rules.sh" "$SRC/lib/findings.sh" \
-   "$SRC/lib/report.sh" "$SRC/lib/exposure.sh" \
+cp "$SRC/lib/patterns.sh" "$SRC/lib/references.sh" "$SRC/lib/rules.sh" \
+   "$SRC/lib/findings.sh" "$SRC/lib/report.sh" "$SRC/lib/exposure.sh" \
    "$SRC/lib/exposure-surfaces.tsv" "$SRC/lib/exposure-limits.tsv" "$DEST/lib/"
 cp "$SRC/bin/hygiene" "$SRC/bin/scan" "$SRC/bin/rulings" \
    "$SRC/bin/memory" "$SRC/bin/explain" "$SRC/bin/exposure" "$DEST/bin/"

@@ -13,7 +13,7 @@ referring to deleted architecture, it is tempting to call the whole problem
 | Context rot | Output quality appears to degrade as context becomes longer, noisier, or less relevant | No. This has multiple possible causes outside the repository |
 | Documentation drift | Documentation no longer matches the implementation | Partly. Hygiene is not a semantic documentation-consistency checker |
 | Instruction residue | Rule-like or decision-like repository text remains after its original context changes or disappears | Yes. This is Hygiene's primary inspection target |
-| Phantom authority | A source comment cites a document that the scanner cannot find in the working tree | Yes, within the scanner's documented file and pattern coverage |
+| Phantom authority | A comment, a link, an import, an agent configuration entry, or a stored symbolic link names something the working tree does not contain | Yes, within the scanner's documented carriers, file types and pattern coverage |
 
 ## Why context bloat costs more tokens
 

@@ -57,6 +57,15 @@ shipped stays in one place.
       history is not scored: the corpus is a plain tree with no history, and the
       runner reports the rule as unscored rather than as a pass. The rule is
       exercised by `test/run` instead.
+- [ ] Benchmark coverage for `HYG-PHA-003`. A broken symbolic link is not scored
+      either: `benchmark/run` copies the corpus to a temporary directory, and a
+      link either does not survive the copy or resolves somewhere else once it
+      lands. The rule is exercised by `test/run`, which builds a valid file
+      link, a valid directory link, a broken link, a link to a missing
+      directory, a loop, and an ignored broken link, and asserts each one. The
+      Markdown-destination carrier of `HYG-PHA-002` is scored; its import and
+      configuration carriers are exercised by `test/run` too, for the reason
+      `benchmark/README.md` gives.
 
 ## P1: Interoperability and adoption
 
@@ -78,6 +87,10 @@ shipped stays in one place.
 - [x] No new required runtime for the core scanner. The scanner still uses only
       `awk`, `sed`, `grep`, `sort`, `find`, `git`, `printf`, `wc`, `cksum`,
       `cut`, `tr`, `basename`, and `paste` — all POSIX or already required.
+      `readlink` is the one addition, for `HYG-PHA-003`, and it is optional: it
+      supplies the target text in the `match` field, and a link is still
+      reported when it is absent. `HYG-PHA-003` itself tests whether the target
+      resolves, which the shell does without any utility.
       `test/invariants` holds the network tripwire over the shipped surface.
 - [x] Tests for text, JSON, and SARIF output. `test/run` asserts the structured
       report against the text report, so a field that disagrees with the report
@@ -185,7 +198,7 @@ checkable, and a claim nothing supports is removed rather than softened.
       is told not to install the tool into itself. Enforced by section 3 of
       `test/invariants`, with a tamper case in `test/run` proving the tripwire
       fires on a copy that instructs first and routes never.
-- [x] `docs/capability-and-evidence-map.md`. Ten symptoms, each mapped to the
+- [x] `docs/capability-and-evidence-map.md`. Twelve symptoms, each mapped to the
       stored condition, the rule or feature, the mechanism, what Hygiene
       establishes, what stays tool and task dependent, an evidence label, and
       the source or test behind it. Six labels are defined and used
@@ -194,7 +207,7 @@ checkable, and a claim nothing supports is removed rather than softened.
       ESTABLISHED.
 - [x] A `## Problems Hygiene is designed to surface` section in `README.md`,
       with the same symptoms in one line each and a link to the map.
-- [x] A capability matrix in `docs/comparison.md`, thirteen rows, one support
+- [x] A capability matrix in `docs/comparison.md`, fifteen rows, one support
       level per tool, with every competitor cell read from that project's own
       published documentation. The levels are Supported, Partial, Not currently
       supported, and Outside scope, and the page defines what each one asserts.
@@ -223,6 +236,15 @@ checkable, and a claim nothing supports is removed rather than softened.
       metadata) belongs on the GitHub Pages site, not in GitHub Markdown, and
       no JSON-LD is added here. Not started, because this pass did not touch the
       Pages source.
+- [ ] Consider an informational rule for machine-specific references outside
+      the scanned root. This would describe portability, not missing targets,
+      and requires separate evidence and review. The condition is real and this
+      release reports nothing about it: `HYG-PHA-002` answers only for paths the
+      scanned repository holds, so it reaches no verdict about a target outside
+      the root, and it deliberately does not distinguish an outside-root file
+      that is missing from one that is there. If the condition is worth a
+      finding, the identifier is selected when the rule, its tests, its benchmark
+      evidence, its limits, and its documentation ship together.
 - [x] No `.cursorrules`, `CLAUDE.md`, or other agent instruction file is added
       to this repository for discovery. `AGENTS.md` exists to route an agent
       that is already reading it, and it is the only such file here. The

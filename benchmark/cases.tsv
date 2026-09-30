@@ -149,7 +149,7 @@ md-arg-discussion	HYG-ARG-002	docs/HISTORY.md	markdown	repository prose recordin
 md-arg-correction	HYG-ARG-002	docs/PROCESS.md	markdown	repository prose recording a correction
 md-arg-reversal	HYG-ARG-002	docs/DECISIONS.md	markdown	repository prose recording a reversal
 md-clean-architecture	clean	docs/ARCHITECTURE.md	markdown	a document that other fixtures cite, so the phantom reference check has a real target
-md-clean-agent-instructions	clean	AGENTS.md	markdown	agent instructions that are current and carry no argument residue
+md-clean-agent-instructions	clean	AGENTS.md	markdown	agent instructions that are current and quiet: an address, a handle and an import that resolves
 md-clean-readme	clean	README.md	markdown	an ordinary project readme
 md-clean-changelog	clean	CHANGELOG.md	markdown	a changelog made of dates and releases
 md-clean-troubleshooting	clean	docs/TROUBLESHOOTING.md	markdown	ordinary operator documentation
@@ -157,3 +157,7 @@ md-clean-boundary	clean	docs/GOVERNANCE.md	markdown	governance-shaped prose in a
 md-clean-spec	clean	docs/DESIGN.md	markdown	a design document that describes an alternative a reviewer ruled out
 md-clean-glossary	clean	docs/GLOSSARY.md	markdown	a glossary
 md-clean-runbook	clean	docs/RUNBOOK.md	markdown	a runbook with dates and an incident description
+md-pha-link-missing	HYG-PHA-002	docs/ONBOARDING.md	markdown	a document linking two files the repository does not contain
+md-pha-import-missing	HYG-PHA-002	CLAUDE.md	markdown	an agent instruction file importing one document the repository has and one it does not
+md-pha-import-nested	HYG-PHA-002	nested/CLAUDE.md	markdown	a nested memory file importing a document that is not there, resolved from its own directory
+md-clean-links	clean	docs/SUPPORT.md	markdown	a document whose links resolve or lead out of the repository

@@ -52,6 +52,7 @@ CASES="$HERE/cases"
 [ -d "$CASES" ]    || { printf 'benchmark: no corpus at %s\n' "$CASES" >&2; exit 2; }
 
 . "$HYG_HOME/lib/patterns.sh"
+. "$HYG_HOME/lib/references.sh"
 . "$HYG_HOME/lib/rules.sh"
 . "$HYG_HOME/lib/findings.sh"
 
@@ -184,8 +185,22 @@ MD
   awk -F'\t' '$3 == 0 { print "- `" $1 "` (" $2 ")" }' "$WORK/rule.view"
   cat <<MD
 
-\`HYG-HIS-001\` needs Git history, and this corpus is a plain tree. The
-scanner's own tests cover it; this benchmark does not.
+Why each of them is unscored, so that the reason cannot outlive the rule:
+MD
+  awk -F'\t' '$3 == 0 { print $1 }' "$WORK/rule.view" | while IFS= read -r r; do
+    case "$r" in
+      HYG-HIS-001)
+        printf '\n- `%s` needs Git history with a deleted document, and this corpus\nis a plain tree.\n' "$r" ;;
+      HYG-PHA-003)
+        printf '\n- `%s` needs a symbolic link, and a corpus copied into a temporary\ndirectory cannot carry one: the copy dereferences it or drops it.\n' "$r" ;;
+      *)
+        printf '\n- `%s` has no cases in this corpus yet.\n' "$r" ;;
+    esac
+  done
+  cat <<MD
+
+The conditions these rules read are exercised by \`./test/run\`; this benchmark
+does not score them.
 
 ## Mismatches
 
