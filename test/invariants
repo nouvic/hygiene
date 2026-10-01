@@ -20,6 +20,7 @@ SURFACE="bin/hygiene bin/scan bin/rulings bin/memory bin/explain bin/exposure
 install install-claude uninstall action.yml
 hooks/pre-commit hooks/commit-msg hooks/check-style
 lib/patterns.sh lib/rules.sh lib/findings.sh lib/report.sh lib/exposure.sh
+lib/references.sh
 claude/pretooluse-hygiene.sh claude/pretooluse-rulings.py
 claude/pretooluse-persistence.py claude/posttooluse-commit-failure.py
 claude/stop-rulings.py claude/prompt-style.py claude/pretooluse-style.py"
@@ -144,6 +145,11 @@ else
            "$ROOT/SECURITY.md" "$ROOT"/docs/*.md; do
     [ -f "$f" ] || continue
     dir="$(dirname "$f")"
+    # Destinations are taken the way the scanner takes them: a fenced block is
+    # not prose, and a code span is a sample rather than a link. Without that,
+    # a document that shows link syntax would have to name a real file every
+    # time it illustrated one, and this check would be enforcing something the
+    # tool does not do.
     while IFS= read -r link; do
       [ -n "$link" ] || continue
       case "$link" in
@@ -155,7 +161,14 @@ else
       [ -e "$dir/$target" ] || broken="$broken
       ${f##*/} -> $link"
     done <<EOF
-$(grep -oE '\]\([^)]+\)' "$f" 2>/dev/null | sed -E 's/^\]\(//; s/\)$//')
+$(awk 'BEGIN { f = 0 }
+  /^[[:space:]]*(```|~~~)/ { f = !f; next }
+  f { next }
+  { line = $0; gsub(/`[^`]*`/, "", line)
+    while (match(line, /\]\([^)]+\)/)) {
+      printf "%s\n", substr(line, RSTART + 2, RLENGTH - 3)
+      line = substr(line, RSTART + RLENGTH)
+    } }' "$f" 2>/dev/null)
 EOF
   done
   if [ -n "$broken" ]; then

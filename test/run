@@ -973,8 +973,18 @@ check "installed scan still finds findings" \
   "$("$INST/.githooks/scan" "$INST" 2>/dev/null | grep -c 'flag.ts')" 1
 check "installed scan emits valid json" \
   "$("$INST/.githooks/scan" --format json "$INST" 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["findings"]))')" 1
-check "install copies every library the scanner reads" \
-  "$(for l in patterns rules findings report; do [ -f "$INST/.githooks/lib/$l.sh" ] || echo missing-$l; done | wc -l | tr -d ' ')" 0
+# The installed scanner reads the surface table as well as the libraries: it
+# answers which files carry import syntax, so a copy without the table reports
+# no findings from that carrier and still exits 0. The check below reads a
+# memory file with an import that does not resolve, which is the finding the
+# table decides.
+printf '%s\n' 'Read @docs/absent.md before you start.' > "$INST/AGENTS.md"
+check "installed scan reads the carrier the surface table names" \
+  "$("$INST/.githooks/scan" "$INST" 2>/dev/null | grep -c 'docs/absent.md')" 1
+check "install copies every library and table the scanner reads" \
+  "$(for l in patterns.sh references.sh rules.sh findings.sh report.sh exposure-surfaces.tsv; do
+       [ -f "$INST/.githooks/lib/$l" ] || echo "missing-$l"
+     done | wc -l | tr -d ' ')" 0
 
 echo
 echo "  ── context exposure ────────────────────────────────────"
@@ -1161,6 +1171,461 @@ check "a non-repository directory still classifies paths" \
   "$(expsurface codex "$PLAINEXP" AGENTS.md)" automatic
 
 echo
+echo
+echo "  ── ghost references ────────────────────────────────────"
+# HYG-PHA-002 and HYG-PHA-003 read a reference from three carriers and from
+# nowhere else, so most of what follows is a negative: a path that resolves, a
+# URL, a placeholder, or a path shown as an example has to stay quiet. The
+# exception is a link on disk, which is not a reference anybody wrote but a file
+# the repository cannot deliver.
+#
+# The fixture is a Git repository rather than a plain tree, because two of the
+# properties under test are about the difference between tracked, untracked and
+# ignored, and that difference only exists in one.
+ghost() {
+  local d="$TMP/$1"; guard "$d"; rm -rf "$d"; mkdir -p "$d"
+  git -C "$d" init -q -b main >/dev/null 2>&1 || true
+  git -C "$d" config user.email t@t; git -C "$d" config user.name t
+  printf '%s' "$d"
+}
+
+# The matched text of every finding of one rule in one file, so a test asserts
+# what was seen and not only how many were counted.
+refmatch() {
+  "$HYG/bin/scan" --format json "$1" 2>/dev/null | python3 -c '
+import json, sys
+rule, path = sys.argv[1], sys.argv[2]
+for f in json.load(sys.stdin)["findings"]:
+    if f["ruleId"] == rule and f["file"] == path:
+        print(f["match"] if f["match"] is not None else "-")' "$2" "$3"
+}
+refcount() {
+  "$HYG/bin/scan" --format json "$1" 2>/dev/null | python3 -c '
+import json, sys
+rule = sys.argv[1]
+print(sum(1 for f in json.load(sys.stdin)["findings"] if f["ruleId"] == rule))' "$2"
+}
+
+GR="$(ghost ghost-refs)"
+# The agent configuration directory and the settings file inside it, assembled
+# from parts rather than spelled out: a command in this suite should not carry
+# the literal path of a persistence-control file, even to write a fixture that
+# is nowhere near the real one. Everything here lives under $TMP.
+CD=".claude"
+CFG="$CD/settings.json"
+mkdir -p "$GR/docs/old" "$GR/src" "$GR/$CD" "$GR/test" "$GR/ignored"
+printf '# design\n' > "$GR/docs/old/design.md"
+printf '# guide\n'  > "$GR/docs/guide.md"
+cat > "$GR/README.md" <<'DOC'
+# Demo
+
+Missing sibling: [the design](docs/design.md)
+Missing after normalisation: [the spec](docs/../deep/spec.md)
+A destination with spaces: [the plan](docs/quarterly plan.md)
+Missing image: ![diagram](docs/diagram.png)
+Valid: [the guide](docs/guide.md)
+Valid with a fragment: [top](docs/guide.md#section)
+Fragment only: [here](#demo)
+External: [site](https://example.com/x)
+Mail: [someone](mailto:a@b.example)
+Data: [inline](data:text/plain,hello)
+Protocol relative: [cdn](//cdn.example.com/x.js)
+Placeholder: [setup](/path/to/project/SETUP.md)
+Glob: [all](docs/*.md)
+Absolute and outside: [hosts](/etc/hosts)
+
+A code span is a sample, not a link: `[sample](docs/not-a-link.md)`.
+
+```
+[fenced](docs/also-not-a-link.md)
+```
+DOC
+# The absolute destinations under the scanned root, appended rather than written
+# above because they have to carry this fixture's own path, which only exists
+# once the directory does. An absolute path under the root is resolved like any
+# other reference: the one that is there stays quiet, and the one that is gone is
+# reported as the repository path it names. Neither depends on where the fixture
+# landed, so the result is the same on macOS and on a Linux runner.
+printf 'Absolute and under the root, and there: [the design](%s/docs/old/design.md)\n' "$GR" \
+  >> "$GR/README.md"
+printf 'Absolute and under the root, and gone: [the notes](%s/docs/old/notes.md)\n' "$GR" \
+  >> "$GR/README.md"
+cat > "$GR/AGENTS.md" <<'DOC'
+# Instructions
+
+The shared rules are in @CLAUDE.md.
+The missing ones are in @docs/missing.md.
+An address is not an import: docs@example.com
+DOC
+cat > "$GR/CLAUDE.md" <<'DOC'
+# Shared
+
+See @docs/missing-notes.md and the sample `@docs/not-an-import.md`.
+DOC
+# The import grammar, at the file that carries it. The at-sign opens an address,
+# a handle and a package scope as readily as it opens an import, and this file
+# holds all three beside the imports a memory file really contains. A parser that
+# reads every @token as a path reports the prose; one that reads none of it
+# misses the imports. Both halves are counted below.
+mkdir -p "$GR/nested"
+cat > "$GR/CLAUDE.local.md" <<'DOC'
+# Local notes
+
+An address is not an import: team@company.org
+An address with a tag is not an import: hello+agents@company.co.uk
+An address in punctuation is not an import: (ops@company.org), or "billing@company.org".
+A handle is not an import: @nouvic and @someone.
+A bare word and a package scope are not imports: @notes or @company/pkg.
+Two imports on one line: @docs/missing.md and @./docs/missing-dot.md.
+An address and an import on one line: team@company.org, see @docs/missing-with-email.md.
+A valid import is not reported: @CLAUDE.md
+A sample is not an import: `@docs/in-a-code-span.md`
+A personal import outside the root is not a finding: @~/.claude/my-project-instructions.md
+
+```
+@docs/in-a-fence.md
+```
+DOC
+# A nested memory file with an import that climbs one level: the reference is
+# joined from the nested directory, stays inside the root, and is reported for
+# the path it names. From the root the same token would climb out and be dropped.
+cat > "$GR/nested/CLAUDE.md" <<'DOC'
+# Nested
+
+An import relative to this file: @../docs/missing-nested.md
+DOC
+cat > "$GR/nested/AGENTS.md" <<'DOC'
+# Nested instructions
+
+The nested import is missing: @docs/missing-agents-nested.md
+DOC
+# A document no row of the exposure table marks as an import carrier. The token
+# below is the shape of an import and would be reported if this file were read
+# for them, which is what makes it a test of the carrier list rather than of the
+# parser.
+cat > "$GR/docs/notes.md" <<'DOC'
+# Notes
+
+Not an import carrier, so this is prose: @docs/gone-forever.md
+DOC
+printf 'export const a = 1;\n' > "$GR/src/a.ts"
+cat > "$GR/$CFG" <<'DOC'
+{
+  "permissions": {
+    "allow": [
+      "Read(src/**)",
+      "Read(docs/**)",
+      "Read(./docs/guide.md)",
+      "Bash(npm test:*)",
+      "Read(/Users/someone/projects/legacy/DESIGN.md)",
+      "Read(docs/no-such-file.md)"
+    ]
+  }
+}
+DOC
+
+# Case 10, in the fixture rather than in a note: a file with the same basename
+# exists, in the wrong directory, and must not satisfy the reference.
+check "the same basename in another directory does not resolve a reference" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^docs/design\.md$')" 1
+check "every unresolved destination in a document is reported once each" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | wc -l | tr -d ' ')" 5
+check "a destination with spaces is matched whole" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^docs/quarterly plan\.md$')" 1
+check "a missing image destination is reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^docs/diagram\.png$')" 1
+check "a documented import of a missing file is reported" \
+  "$(refmatch "$GR" HYG-PHA-002 AGENTS.md)" "docs/missing.md"
+check "an import is resolved from the importing file" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.md)" "docs/missing-notes.md"
+check "an absolute path under the root is resolved against the root" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c "^$GR/docs/old/notes\.md$")" 1
+check "an absolute path under the root that is there is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c "^$GR/docs/old/design\.md$")" 0
+check "an absolute path under the root reads as a repository path" \
+  "$("$HYG/bin/scan" --format json "$GR" 2>/dev/null | python3 -c '
+import json, sys
+print(sum(1 for f in json.load(sys.stdin)["findings"]
+          if f["ruleId"] == "HYG-PHA-002"
+          and f["match"] and f["match"].endswith("/docs/old/notes.md")
+          and "not found in this repository" in f["evidence"]))')" 1
+check "a missing configured path is reported" \
+  "$(refmatch "$GR" HYG-PHA-002 "$CFG" | grep -c '^docs/no-such-file\.md$')" 1
+check "a path outside the scanned root in agent configuration is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 "$CFG" \
+     | grep -c '^/Users/someone/projects/legacy/DESIGN\.md$')" 0
+
+# The negatives. Each of these is a shape a careless resolver reports.
+check "a valid relative link is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c 'docs/guide\.md')" 0
+check "a fragment on a valid link is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '#section')" 0
+check "a fragment-only link is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^#demo$')" 0
+check "external, mail, data and protocol-relative destinations are not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md \
+     | grep -Ec 'example\.com|mailto:|data:|cdn\.')" 0
+check "a placeholder path is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c 'path/to/project')" 0
+check "a glob is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '\*\.md')" 0
+check "a link inside a code span is a sample, not a link" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c 'not-a-link')" 0
+check "a link inside a fenced block is a sample, not a link" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c 'also-not-a-link')" 0
+check "an import inside a code span is a sample, not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.md | grep -c 'not-an-import')" 0
+check "a valid import is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 AGENTS.md | grep -c 'CLAUDE\.md')" 0
+check "an address is not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 AGENTS.md | grep -c 'example\.com')" 0
+# The import grammar. Each negative here is a shape that ordinary prose is full
+# of, and each positive is an import the documented syntax really writes.
+check "every import in a memory file is reported once each" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | wc -l | tr -d ' ')" 3
+check "an import written with a leading ./ is read" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c '^\./docs/missing-dot\.md$')" 1
+check "two imports on one line are both read" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c '^docs/missing\.md$')" 1
+check "an address and an import on one line are told apart" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c '^docs/missing-with-email\.md$')" 1
+check "a valid import in a memory file is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c 'CLAUDE\.md')" 0
+check "an address is not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c 'company\.org')" 0
+check "a handle is not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -Ec '^(nouvic|someone)$')" 0
+check "a bare word and a package scope are not imports" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -Ec '^(notes|company/pkg)$')" 0
+check "an import inside a code span is a sample, not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c 'in-a-code-span')" 0
+check "an import inside a fenced block is a sample, not an import" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c 'in-a-fence')" 0
+
+# Which files are read for imports comes from the exposure table's imports
+# column and from nothing else.
+check "an import in a nested memory file is joined from that file" \
+  "$(refmatch "$GR" HYG-PHA-002 nested/CLAUDE.md)" "../docs/missing-nested.md"
+check "an import in a nested agent instruction file is read" \
+  "$(refmatch "$GR" HYG-PHA-002 nested/AGENTS.md)" "docs/missing-agents-nested.md"
+check "a document the table does not mark as a carrier is not read for imports" \
+  "$(refmatch "$GR" HYG-PHA-002 docs/notes.md | wc -l | tr -d ' ')" 0
+
+check "valid configured paths are not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 "$CFG" | grep -Ec '^docs$|^src$|npm test')" 0
+check "a tool name in a permission expression is not a path" \
+  "$(refmatch "$GR" HYG-PHA-002 "$CFG" | grep -c '^Bash$')" 0
+
+# A path that climbs out of the scanned root is not resolved and not reported,
+# and nothing outside the root is read to decide that.
+check "a reference that escapes the repository is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c 'etc/hosts')" 0
+check "an absolute path outside the repository is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^/etc/hosts$')" 0
+ESCAPE="$(ghost ghost-escape)"
+# The file the escaping link names does exist, one level above the root, so a
+# resolver that followed it would find it and call the reference sound. It is
+# not read, and the reference is not reported either.
+printf 'outside\n' > "$TMP/outside.md"
+printf '# up\n\n[out](../outside.md)\n[gone](../never-there.md)\n' > "$ESCAPE/up.md"
+check "a relative path that climbs above the root is not reported" \
+  "$(refmatch "$ESCAPE" HYG-PHA-002 up.md | wc -l | tr -d ' ')" 0
+check "a file outside the root is not evidence about the root" \
+  "$(refmatch "$ESCAPE" HYG-PHA-002 up.md | grep -c 'outside')" 0
+check "scanning a tree with an escaping reference still exits 0" \
+  "$("$HYG/bin/scan" "$ESCAPE" >/dev/null 2>&1; echo $?)" 0
+
+# An absolute path outside the scanned root is outside this rule, and a path
+# written with a leading tilde is the same thing written short. Neither is
+# opened, so neither is reported, and the answer does not depend on whether the
+# file is there. The fixture below carries both halves of that pair: for each
+# home-style prefix a directory that exists on the machine running the suite,
+# when it does, and a name that cannot exist on any machine.
+printf 'Tilde: [personal](~/.claude/my-project-instructions.md)\n' >> "$GR/README.md"
+for dir in /Users /home /Volumes; do
+  [ -d "$dir" ] && printf 'Outside, and there: [dir](%s)\n' "$dir" >> "$GR/README.md"
+  printf 'Outside, and gone: [probe](%s/hygiene-nonexistent-probe/notes.md)\n' "$dir" \
+    >> "$GR/README.md"
+done
+# The home directory itself is the half that certainly exists on the machine
+# running the suite, and its prefix is /Users or /home on the platforms this
+# project supports. Beside it, a name that certainly does not.
+printf 'Outside, and there: [home](%s)\n' "$HOME" >> "$GR/README.md"
+printf 'Outside, and gone: [home notes](%s/hygiene-nonexistent-probe.md)\n' "$HOME" \
+  >> "$GR/README.md"
+check "a personal import outside the root is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 CLAUDE.local.md | grep -c 'my-project-instructions')" 0
+check "a tilde destination outside the root is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^~/')" 0
+check "an absolute path outside the root is not reported, existing or not" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -Fv "$GR" | grep -Ec '^/|^~')" 0
+check "a path under a home directory outside the root is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -Ec '^(/Users|/home)')" 0
+check "a mount path outside the root is not reported" \
+  "$(refmatch "$GR" HYG-PHA-002 README.md | grep -c '^/Volumes')" 0
+check "scanning a tree carrying outside-root references still exits 0" \
+  "$("$HYG/bin/scan" "$GR" >/dev/null 2>&1; echo $?)" 0
+
+# An exempt path is not an input. A test fixture is allowed to hold a link
+# whose target is not there — that is what a fixture is for.
+printf '# fixture\n\n[missing](docs/gone.md)\n' > "$GR/test/fixture-notes.md"
+check "a broken reference inside a test fixture is exempt" \
+  "$(refmatch "$GR" HYG-PHA-002 test/fixture-notes.md | wc -l | tr -d ' ')" 0
+
+echo "  ── broken links ────────────────────────────────────────"
+mkdir -p "$GR/docs/guides"
+printf '# target\n' > "$GR/docs/guides/target.md"
+ln -s target.md                 "$GR/docs/guides/good.md"
+ln -s ../guides                 "$GR/docs/guides/dir-good"
+ln -s gone.md                   "$GR/docs/guides/broken.md"
+ln -s ../never-there            "$GR/docs/guides/broken-dir"
+ln -s broken-untracked.md       "$GR/untracked-broken.md"
+ln -s loop-b                    "$GR/src/loop-a"
+ln -s loop-a                    "$GR/src/loop-b"
+printf 'ignored/\n' > "$GR/.gitignore"
+ln -s ignored-broken.md         "$GR/ignored/ignored-broken.md"
+# A target written as an absolute path is a link like any other: what decides
+# is whether it resolves, not how the target is spelled.
+ln -s "$GR/docs/guides/target.md" "$GR/docs/guides/abs-good.md"
+ln -s "$GR/hygiene-nonexistent-probe/target.md" "$GR/docs/guides/abs-broken.md"
+git -C "$GR" add -A >/dev/null 2>&1
+git -C "$GR" commit -q -m "feat: fixture" >/dev/null 2>&1
+
+check "a broken tracked link is reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/broken.md)" "gone.md"
+check "a broken link to a missing directory is reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/broken-dir)" "../never-there"
+check "a broken link nothing tracks is reported" \
+  "$(refmatch "$GR" HYG-PHA-003 untracked-broken.md)" "broken-untracked.md"
+check "a valid link to a file is not reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/good.md | wc -l | tr -d ' ')" 0
+check "a valid link to a directory is not reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/dir-good | wc -l | tr -d ' ')" 0
+check "a broken link to an absolute target is reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/abs-broken.md)" \
+  "$GR/hygiene-nonexistent-probe/target.md"
+check "a valid link to an absolute target is not reported" \
+  "$(refmatch "$GR" HYG-PHA-003 docs/guides/abs-good.md | wc -l | tr -d ' ')" 0
+# The ignored path is written before the commit, so the link inside it is
+# ignored in the tree the scan reads rather than only after the fact.
+check "a broken link in an ignored path is not an input" \
+  "$(refmatch "$GR" HYG-PHA-003 ignored/ignored-broken.md | wc -l | tr -d ' ')" 0
+check "a link is a file-level finding with no line" \
+  "$("$HYG/bin/scan" --format json "$GR" 2>/dev/null | python3 -c '
+import json, sys
+for f in json.load(sys.stdin)["findings"]:
+    if f["file"] == "docs/guides/broken.md":
+        print(f["line"])')" "None"
+# A loop is a link that does not resolve. It is reported, once, and the scan
+# terminates rather than following it.
+check "a link loop terminates and is reported" "$(refcount "$GR" HYG-PHA-003)" 6
+
+echo "  ── ghost references in the other formats ───────────────"
+"$HYG/bin/scan" --format json "$GR" > "$TMP/ghost.json" 2>"$TMP/ghost.err"
+check "a tree full of ghost references still exits 0" "$?" 0
+check "reporting them writes nothing to stderr" \
+  "$(wc -l < "$TMP/ghost.err" | tr -d ' ')" 0
+python3 - "$TMP/ghost.json" <<'PYEOF' && ok "json carries both new rules with their evidence" || bad "json ghost shape"
+import json, sys
+d = json.load(open(sys.argv[1]))
+byrule = {}
+for f in d["findings"]:
+    byrule.setdefault(f["ruleId"], []).append(f)
+assert "HYG-PHA-002" in byrule and "HYG-PHA-003" in byrule, sorted(byrule)
+for f in byrule["HYG-PHA-002"]:
+    assert f["category"] == "phantom-reference", f
+    assert f["severity"] == "warning", f
+    assert isinstance(f["line"], int), f
+    assert f["match"], f
+    assert "not found in this repository" in f["evidence"], f
+for f in byrule["HYG-PHA-003"]:
+    assert f["line"] is None, f
+    assert f["fingerprint"].split(":")[1] == "p", f
+PYEOF
+
+"$HYG/bin/scan" --format sarif "$GR" > "$TMP/ghost.sarif" 2>/dev/null
+python3 - "$TMP/ghost.sarif" <<'PYEOF' && ok "sarif gives a textual reference a line" || bad "sarif ghost location"
+import json, sys
+d = json.load(open(sys.argv[1]))
+run = d["runs"][0]
+ids = {r["ruleId"] for r in run["results"]}
+assert {"HYG-PHA-002", "HYG-PHA-003"} <= ids, ids
+textual = [r for r in run["results"] if r["ruleId"] == "HYG-PHA-002"][0]
+assert textual["locations"][0]["physicalLocation"]["region"]["startLine"] >= 1, textual
+link = [r for r in run["results"] if r["ruleId"] == "HYG-PHA-003"][0]
+assert "region" not in link["locations"][0]["physicalLocation"], link
+PYEOF
+
+check "strict fails on a ghost reference" \
+  "$("$HYG/bin/scan" --strict "$GR" >/dev/null 2>&1; echo $?)" 1
+check "strict changes nothing about the report" \
+  "$("$HYG/bin/scan" --strict "$GR" 2>/dev/null | sed -n '2p')" \
+  "$("$HYG/bin/scan" "$GR" 2>/dev/null | sed -n '2p')"
+
+echo "  ── ghost references and baselines ──────────────────────"
+GB="$(ghost ghost-baseline)"; mkdir -p "$GB/docs"
+printf '# guide\n' > "$GB/docs/guide.md"
+printf '# top\n\n[the guide](docs/guide.md)\n' > "$GB/README.md"
+"$HYG/bin/scan" --write-baseline "$GB" >/dev/null 2>&1
+printf '# top\n\n[the guide](docs/guide.md)\n[the missing one](docs/missing.md)\n' > "$GB/README.md"
+check "new-only reports a newly broken link" "$(scan_count --new "$GB")" 1
+check "new-only names the reference it reported" \
+  "$("$HYG/bin/scan" --new "$GB" 2>/dev/null | grep -c 'docs/missing.md')" 1
+check "new-only hides the reference it recorded" \
+  "$("$HYG/bin/scan" --new "$GB" 2>/dev/null | grep -c 'docs/guide.md')" 0
+"$HYG/bin/scan" --write-baseline "$GB" >/dev/null 2>&1
+check "the recorded reference is not new once it is baselined" \
+  "$(scan_count --new "$GB")" 0
+ln -s nowhere.md "$GB/docs/lost.md"
+"$HYG/bin/scan" --write-baseline "$GB" >/dev/null 2>&1
+check "a broken link can be suppressed by a baseline" \
+  "$(scan_count --new "$GB")" 0
+rm "$GB/docs/guide.md"
+check "a link that appears broken after the baseline is new" \
+  "$(scan_count --new "$GB")" 1
+
+echo "  ── agent instruction residue ───────────────────────────"
+# An agent instruction file is prose, and prose residue is already a finding.
+# The risk this guards is the opposite one: treating every imperative in an
+# instruction file as governance would make the scanner unusable in the one
+# file it was built to read.
+AI="$(ghost agent-instructions)"
+cat > "$AI/CLAUDE.md" <<'DOC'
+# Project
+
+Run ./test/run before opening a pull request.
+Do not commit generated output.
+Use the repository-relative configuration.
+The shared conventions are in @docs/conventions.md.
+Notes: [the map](docs/map.md)
+
+The user rejected this approach.
+We decided never to use the previous workflow.
+Claude was told to ignore the old implementation.
+DOC
+mkdir -p "$AI/docs"
+printf '# conventions\n' > "$AI/docs/conventions.md"
+printf '# map\n' > "$AI/docs/map.md"
+check "an ordinary instruction in an agent file is not governance" \
+  "$(refcount "$AI" HYG-GOV-001)" 0
+check "an ordinary instruction in an agent file is not residue" \
+  "$(refmatch "$AI" HYG-ARG-002 CLAUDE.md \
+     | grep -Ec 'Run \./test/run|Do not commit|repository-relative')" 0
+check "a past disagreement in an agent file is residue" \
+  "$(refcount "$AI" HYG-ARG-002)" 3
+check "a valid import in an agent file is not reported" \
+  "$(refmatch "$AI" HYG-PHA-002 CLAUDE.md | wc -l | tr -d ' ')" 0
+check "a valid link in an agent file is not reported" \
+  "$(refcount "$AI" HYG-PHA-002)" 0
+printf '\nSee @docs/removed.md for the old flow.\n' >> "$AI/CLAUDE.md"
+check "a missing import in an agent file is reported" \
+  "$(refmatch "$AI" HYG-PHA-002 CLAUDE.md)" "docs/removed.md"
+printf '\nSee [the removed map](docs/removed-map.md).\n' >> "$AI/CLAUDE.md"
+check "a deleted document linked from an agent file is reported" \
+  "$(refmatch "$AI" HYG-PHA-002 CLAUDE.md | grep -c 'docs/removed-map\.md')" 1
+
+echo
+
 echo "  ── exposure fixtures ───────────────────────────────────"
 # One synthetic repository per tool is committed beside this suite, with the
 # outcome each one must produce in test/exposure/expected.tsv. The expectations

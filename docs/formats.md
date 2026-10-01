@@ -63,6 +63,11 @@ Each finding:
 treats a missing line as line zero points a code annotation at the top of the
 file; a consumer that reads `null` knows there is no line to point at.
 
+The two are independent, so one `null` does not imply the other. A file-level
+finding has `line: null` and can still carry a `match`: `HYG-PHA-003` names the
+target of the link it could not resolve, which is narrower than the file and not
+attached to a line.
+
 ### Escaping
 
 Every string field passes through one function. Control characters that JSON

@@ -16,6 +16,11 @@ HYG_EXEMPT_PATHS='(^|/)(node_modules|vendor|dist|build|out|target|coverage|\.nex
 # file is prose wherever it sits, so both are read the same way as a document.
 HYG_DOC_EXT='\.(md|mdx|mdc|markdown|rst|txt)$'
 
+# Documents with Markdown link syntax. A reference in an .rst or .txt file is
+# still prose, but `](destination)` is not how one is written there, so only
+# these extensions are read for link destinations.
+HYG_MD_EXT='\.(md|mdx|mdc|markdown)$'
+
 # Files that carry code, and therefore carry comments. Data and config files are
 # excluded — they have no comments to scan and would distort the density figure.
 HYG_SRC_EXT='\.(ts|tsx|js|jsx|mjs|cjs|css|scss|sass|less|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|sql|vue|svelte|astro|ex|exs|lua|dart|scala|clj|hs|ml|r|jl|tf|yml|yaml)$'
@@ -56,7 +61,7 @@ HYG_GOV_CI="$HYG_IMPERATIVE|$HYG_AUTHORITY|$HYG_PROCESS|$HYG_DOCREF"
 # ----------------------------------------------------------- argument residue
 # The record of a past disagreement. Near-zero information value, and it primes
 # an agent's stance toward the user before it reads a line of code.
-HYG_RESIDUE='owner[[:space:]]+(corrected|rejected|struck|overruled|flagged|caught|had to)|(stated|said|corrected|repeated|told)[[:space:]]+(it[[:space:]]+)?(twice|three times|3 times|for the [a-z]+ time)|(second|third|fourth|fifth|tenth|3rd|4th)[[:space:]]+time|was[[:space:]]+(rejected|superseded|reversed|overruled)|(he|she|they|the owner)[[:space:]]+had[[:space:]]+to|recurred[[:space:]]+across|cost[[:space:]]+(him|her|them|us)[[:space:]]+(a|his|her|their)[[:space:]]+day|re-?litigat|so[[:space:]]+it[[:space:]]+is[[:space:]]+not[[:space:]]+(proposed|raised|reopened)|(the[[:space:]]+)?(user|owner|client)[[:space:]]+(wanted|asked|preferred|rejected|refused|corrected|decided|agreed|insisted|objected|overruled)|(^|[^a-z])(i|we|the agent|the assistant|claude)[[:space:]]+(argued|refused|pushed back|convinced|disagreed)|we[[:space:]]+(eventually[[:space:]]+|finally[[:space:]]+)?(agreed|decided|settled|concluded)|(after|during|in)[[:space:]]+(the[[:space:]]+|this[[:space:]]+|our[[:space:]]+)?(argument|discussion|conversation|session|debate)'
+HYG_RESIDUE='owner[[:space:]]+(corrected|rejected|struck|overruled|flagged|caught|had to)|(stated|said|corrected|repeated|told)[[:space:]]+(it[[:space:]]+)?(twice|three times|3 times|for the [a-z]+ time)|(second|third|fourth|fifth|tenth|3rd|4th)[[:space:]]+time|was[[:space:]]+(rejected|superseded|reversed|overruled)|(he|she|they|the owner)[[:space:]]+had[[:space:]]+to|recurred[[:space:]]+across|cost[[:space:]]+(him|her|them|us)[[:space:]]+(a|his|her|their)[[:space:]]+day|re-?litigat|so[[:space:]]+it[[:space:]]+is[[:space:]]+not[[:space:]]+(proposed|raised|reopened)|(the[[:space:]]+)?(user|owner|client)[[:space:]]+(wanted|asked|preferred|rejected|refused|corrected|decided|agreed|insisted|objected|overruled)|(^|[^a-z])(i|we|the agent|the assistant|claude)[[:space:]]+((was|were)[[:space:]]+(told|instructed|asked|reminded|directed)|(argued|refused|pushed back|convinced|disagreed))|we[[:space:]]+(eventually[[:space:]]+|finally[[:space:]]+)?(agreed|decided|settled|concluded)|(after|during|in)[[:space:]]+(the[[:space:]]+|this[[:space:]]+|our[[:space:]]+)?(argument|discussion|conversation|session|debate)'
 
 # ---------------------------------------------------------- commit subjects
 # A source file is worth looking at when it carries this much comment, and it

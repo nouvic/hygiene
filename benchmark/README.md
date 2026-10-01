@@ -50,7 +50,7 @@ a scanner get uninstalled, and a miss is what it was built to find.
 
 1. Pick a family. The nine code families (TypeScript, JavaScript, Python, Go,
    Rust, Java, Ruby, Shell, YAML) each carry the same sixteen archetypes, and
-   Markdown carries twelve of its own. Keeping the archetypes parallel is what
+   Markdown carries fourteen of its own. Keeping the archetypes parallel is what
    lets a per-family comparison mean anything.
 2. Write the file the way a real file of that family looks. A Go comment has a
    `//` and a package clause; a YAML case is a real fragment of configuration.
@@ -70,6 +70,45 @@ a scanner get uninstalled, and a miss is what it was built to find.
 Do not write a case to make a number move, and do not derive a label by
 running the detector first. The corpus is the specification; a detector that
 passes a corpus written to match it has been tested against itself.
+
+## What the reference cases cover, and what they do not
+
+`HYG-PHA-002` is scored on the two carriers the corpus can hold on its own: a
+path written as a Markdown destination and a path written as a documented local
+import, each in a file whose directory is the base a reader resolves it from.
+`md-pha-link-missing` is the positive for the first carrier. `md-clean-links` is
+its nearest negative: a resolving link, a fragment, a fragment on a resolving
+link, an external URL, a mail and a data destination, a protocol-relative URL, a
+placeholder, a glob, a destination in a code span, a destination in a fenced
+block, and a link that climbs above the corpus root.
+
+For the second carrier, `md-pha-import-missing` is the positive in a memory file
+at the corpus root and `md-pha-import-nested` is the positive in a nested one,
+whose import is joined from the directory it sits in before it is found missing.
+Both files import a second path that does resolve, so a rule that read the whole
+file as one reference, or that reported every token after an at-sign, is not
+scored as correct by them. `md-clean-agent-instructions` is the nearest
+negative: agent instructions carrying an address, a handle and an import that
+resolves, none of them a finding.
+
+Three things this corpus deliberately does not carry, each for a reason
+recorded here rather than left to be inferred:
+
+- **The settings carrier.** A path-bearing permission expression is read only in
+  the two Claude Code settings files, which are one specific path each. A
+  fixture a reader has to be told about to trust is written and asserted in
+  `./test/run`, which builds one under a temporary directory. The corpus is a
+  shared tree with no `.claude/` in it, and adding one would make every other
+  case's path set depend on it.
+- **`HYG-PHA-003`.** The run reports the rule as unscored rather than as a
+  pass, because a symbolic link is not a file the corpus can hold: copying the
+  corpus dereferences or drops it, and a link that survives the copy resolves
+  differently depending on where the copy landed. `./test/run` builds links,
+  including a loop and a broken one, and asserts the rule there.
+- **The residue shape in an agent instruction file.** `md-clean-agent-instructions`
+  covers current instructions in `AGENTS.md` and stays clean; the residue
+  sentences, and the import grammar inside a memory file, are asserted in
+  `./test/run` alongside it.
 
 ## Reviewing a case
 
@@ -114,10 +153,18 @@ on it, say why it is left standing.
   the corpus alone. `benchmark/` is listed in `.hygieneignore` so that
   scanning the Hygiene repository itself does not read the fixtures.
 
-## One deliberate dependency between cases
+## Deliberate dependencies between cases
 
-Nine cases cite `docs/ARCHITECTURE.md` and expect governance only, which is
-the negative control for the phantom-reference check: the citation is real, so
-`HYG-PHA-001` must not fire. That file is supplied by `md-clean-architecture`,
-which is itself expected to be clean. Deleting or moving that case breaks the
-nine, so its note says so.
+Two, and both are load-bearing.
+
+- Nine cases cite `docs/ARCHITECTURE.md` and expect governance only, which is
+  the negative control for the phantom-reference check: the citation is real, so
+  `HYG-PHA-001` must not fire. That file is supplied by
+  `md-clean-architecture`, which is itself expected to be clean. Deleting or
+  moving that case breaks the nine, so its note says so.
+- `md-pha-link-missing` links two documents the corpus does not contain *and*
+  two it does: `RUNBOOK.md` and `../assets/topology.png` are the ones that must
+  fire. `md-clean-links` resolves every one of its destinations against
+  `RUNBOOK.md`, `DESIGN.md` and `GLOSSARY.md`, supplied by `md-clean-runbook`,
+  `md-clean-spec` and `md-clean-glossary`. Deleting any of those three turns a
+  negative into a positive without touching the case that changed.

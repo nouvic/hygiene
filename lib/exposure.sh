@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # exposure: the loading surface of each file a finding sits in, for one named
-# agent tool. Sourced by bin/exposure after lib/patterns.sh, lib/rules.sh,
-# lib/findings.sh and lib/report.sh. bash 3.2 compatible.
+# agent tool. Sourced by bin/exposure after lib/patterns.sh, lib/references.sh,
+# lib/rules.sh, lib/findings.sh and lib/report.sh. bash 3.2 compatible.
 #
 # The path patterns, the surfaces, the reasons and the limitations are data, in
 # two tables beside this file. This file is the interpreter: it matches a path
@@ -20,7 +20,7 @@
 # file carries.
 
 [ -n "${HYG_HOME:-}" ] || HYG_HOME="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HYG_SURFACES="$HYG_HOME/lib/exposure-surfaces.tsv"
+. "$HYG_HOME/lib/references.sh"
 HYG_LIMITS="$HYG_HOME/lib/exposure-limits.tsv"
 
 HYG_EXPOSURE_TOOLS='claude-code
@@ -30,29 +30,6 @@ copilot
 generic'
 
 hyg_exposure_tool_known() { printf '%s\n' "$HYG_EXPOSURE_TOOLS" | grep -qx "$1"; }
-
-# A table without its comments and blank lines. Both are read once for the whole
-# run, because every file in scope is looked up against the surface table.
-hyg_table() {
-  if [ -z "${HYG_TABLE_CACHE:-}" ]; then
-    HYG_TABLE_CACHE="$(grep -v '^[[:space:]]*#' "$HYG_SURFACES" 2>/dev/null | grep -v '^[[:space:]]*$')"
-  fi
-  printf '%s\n' "$HYG_TABLE_CACHE"
-}
-
-# A table pattern is a pipe-separated list of case globs. An expansion in a case
-# pattern does not split on the separator, so the alternatives are walked here
-# with globbing off and the separator as IFS.
-hyg_path_matches() {
-  local p="$1" pat="$2" alt
-  set -f
-  local IFS='|'
-  for alt in $pat; do
-    case "$p" in $alt) set +f; return 0 ;; esac
-  done
-  set +f
-  return 1
-}
 
 hyg_limits_table() {
   grep -v '^[[:space:]]*#' "$HYG_LIMITS" 2>/dev/null | grep -v '^[[:space:]]*$'
@@ -82,32 +59,10 @@ hyg_frontmatter_has() {
 }
 
 # ------------------------------------------------------------------- path work
-
-# dir + target with . and .. resolved, for an import written relative to the file
-# holding it. An absolute target, or one starting with ~, is returned as it
-# stands: it resolves outside the repository, and the caller reports that.
-hyg_join_path() {
-  local dir="$1" t="$2" out="" seg path
-  case "$t" in
-    /*|'~'*) printf '%s\n' "$t"; return ;;
-  esac
-  if [ -n "$dir" ]; then path="$dir/$t"; else path="$t"; fi
-  set -f
-  local IFS='/'
-  for seg in $path; do
-    case "$seg" in
-      ''|.) ;;
-      ..) case "$out" in */*) out="${out%/*}" ;; *) out="" ;; esac ;;
-      *)  out="${out:+$out/}$seg" ;;
-    esac
-  done
-  set +f
-  printf '%s\n' "$out"
-}
-
-# The directory an entry-level file governs. Empty means the repository root,
-# which is the difference between a root surface and a nested one.
-hyg_dir_of() { case "$1" in */*) printf '%s\n' "${1%/*}" ;; *) printf '' ;; esac; }
+# hyg_join_path, hyg_ref_join, hyg_dir_of, hyg_path_matches and hyg_table live
+# in lib/references.sh, which this file sources: the scanner and the benchmark
+# resolve references with the same code the exposure report resolves imports
+# with, so the two cannot describe one path two ways.
 
 # Whether a directory holds any of the named files, where the names arrive as a
 # pipe-separated list from the table. Only literals are tested: a name carrying
@@ -127,22 +82,14 @@ hyg_dir_holds_any() {
 
 # --------------------------------------------------------------- import graph
 
-# The @path tokens in a memory file, one per line. Fenced blocks and inline code
-# spans come out first: a path inside backticks is text rather than an import,
-# and a parser that missed that would report a file named in an example as one
-# that loads.
-hyg_imports_in() {
-  awk '
-    /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
-    fence { next }
-    { print }
-  ' "$1" 2>/dev/null | sed 's/`[^`]*`//g' \
-    | grep -oE '@[^ 	]+' 2>/dev/null | sed 's/^@//' | sed -E 's/[.,;:)]+$//'
-}
+# hyg_imports_in lives in lib/references.sh, beside the line-numbered form the
+# scanner reports from, so one parser serves both.
 
-# The files the table marks as carrying an import. The syntax is documented for
-# some of them and not for a rules directory, and a file that cannot carry one is
-# never in the closure.
+# Where the closure starts: the import carriers whose pattern is one literal
+# path, which is the set a launch loads without knowing where work will reach.
+# A pattern carrying a wildcard or an alternative names a file whose loading
+# depends on that, which the closure does not model, and a file the table gives
+# no import syntax is never in the closure at all.
 hyg_memory_files() {
   local root="$1" t pat fam surf why param imp
   while IFS="$TAB" read -r t pat fam surf why param imp; do

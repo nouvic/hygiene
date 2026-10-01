@@ -19,6 +19,7 @@ for _c in "$_hyg_d" "$_hyg_d/.."; do
 done
 [ -n "$HYG_HOME" ] || { echo "hygiene: patterns library not found" >&2; exit 0; }
 . "$HYG_HOME/lib/patterns.sh"
+. "$HYG_HOME/lib/references.sh"
 . "$HYG_HOME/lib/rules.sh"
 . "$HYG_HOME/lib/findings.sh"
 . "$HYG_HOME/lib/report.sh"
@@ -273,16 +274,24 @@ PH=""; PH_N=0
 # Section 7 fills these in, but only inside a Git repository. The verdict below
 # counts them, so they have to exist either way.
 DEL_F=0; DEL_L=0
+# A citation, a link, an import and a link on disk all fail the same way, and
+# one heading covers them: something this repository points at is not there.
+# The line is shown where the finding has one, so a destination in a long
+# document can be found without opening the structured report.
 while IFS="$US" read -r f ln m ev; do
   [ -n "$f" ] || continue
-  PH_N=$((PH_N + 1)); PH="$PH  $f → $m
+  PH_N=$((PH_N + 1))
+  if [ -n "$ln" ]; then PH="$PH  $f:$ln → $m
 "
+  else PH="$PH  $f → $m
+"
+  fi
 done <<EOF
-$(select_rule HYG-PHA-001)
+$(select_rule HYG-PHA-001; select_rule HYG-PHA-002; select_rule HYG-PHA-003)
 EOF
 
 if [ "$PH_N" -gt 0 ]; then
-  printf '  %sphantom authority%s   %s%s references%s — cited documents that do not exist\n' \
+  printf '  %sphantom authority%s   %s%s references%s — citations, links and targets that do not resolve\n' \
     "$HYG_BLD" "$HYG_OFF" "$HYG_RED" "$PH_N" "$HYG_OFF"
   printf '%s' "$PH" | head -5 | sed 's/^/  /'
 else
