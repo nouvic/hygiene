@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # report: structured output, finding identity, and baselines.
-# Sourced by bin/scan after lib/patterns.sh, lib/rules.sh and lib/findings.sh.
+# Sourced by bin/scan after lib/patterns.sh, lib/references.sh, lib/rules.sh and
+# lib/findings.sh.
 # bash 3.2 compatible.
 #
 # Three things live here, and nothing else writes to disk:

@@ -28,7 +28,7 @@ capabilities pages change; follow the projects for their current state.
 | Its own description | Governance hygiene for repos worked on by agents | Lint AI agent context files, MCP server configs, and session data against your actual codebase | Lint agent configurations before they break your workflow |
 | What it reads | Source comments, repository prose, Git history | Context files, MCP configs, agent sessions, skills | Agent configuration files, skills, hooks, MCP configs |
 | What it asserts | That a comment or prose passage carries instruction-like residue: a rule, a past disagreement, a reference to a document that does not exist, or a size signal | That a context file disagrees with the codebase, or that config and session data carry a documented defect | That an agent configuration is invalid or misleading, per documented specs and breakage patterns |
-| Rule set | 6 rules in 5 categories | 43 context-file, 29 MCP, 13 session, and 5 skill rules across four open specs | 457 rules claimed, with per-tool prefixes such as CC-\*, CUR-\*, MCP-\*, AGM-\* |
+| Rule set | 8 rules in 5 categories | 43 context-file, 29 MCP, 13 session, and 5 skill rules across four open specs | 457 rules claimed, with per-tool prefixes such as CC-\*, CUR-\*, MCP-\*, AGM-\* |
 | Runtime | Bash, Git, standard Unix utilities | Node, single self-contained bundle | Rust binary, also published to npm, Homebrew, pip, and Cargo |
 | Network, keys, model | None; the scan is local and deterministic | No API key or model documented; `npx` fetches the package | No network, API key, or model documented for the linter |
 | Writes | Never to the scanned tree; only a baseline or report you name | Reporting by default; `--fix`, `init`, and the `ctxlint_fix` MCP tool write | Reporting by default; `--fix`, `--fix-safe`, `--fix-unsafe` write |
@@ -54,6 +54,8 @@ measurement, and no project was installed or run to write it.
 | --- | --- | --- | --- |
 | Primary object inspected | Instruction-like residue in a repository: source comments, repository prose, Git history | Agent context files, MCP configs, sessions, memory, and skills, against the codebase | Agent configuration files, against published specs and known breakage patterns |
 | Instruction-like text in source comments | Supported (`HYG-GOV-001`, `HYG-ARG-001`, `HYG-PHA-001`) | Not currently supported | Not currently supported |
+| Repository-local references that do not resolve: Markdown links, agent-file imports, path-valued agent configuration | Supported (`HYG-PHA-002`, and `HYG-PHA-001` for a basename citation in a comment) | Supported (the `paths` check resolves references in the context files and MCP configs it reads) | Partial (validates paths in the agent configuration files it reads, as part of schema and breakage checking) |
+| Symbolic links whose target does not resolve | Supported (`HYG-PHA-003`; the scan reports the link and never follows it) | Not documented in the sources retrieved | Not documented in the sources retrieved |
 | General repository prose | Supported (`HYG-ARG-002`, `HYG-VOL-001`) | Partial (the context files it lints are Markdown; repository prose in general is not its object) | Partial (agent instruction files such as `CLAUDE.md` and `SKILL.md` are Markdown; other prose is not its object) |
 | Explicit agent instruction files (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`) | Partial (read as prose for argument residue, and modelled by loading surface in `hygiene exposure`; no validity check) | Supported | Supported |
 | Git history | Partial (reports prose deleted from the tree that remains retrievable; no path repair) | Partial (documents Git history for `--fix` path repair and rename detection) | Not currently supported |
@@ -80,7 +82,7 @@ How to read the levels:
   out. It is not a defect, and nothing here says otherwise.
 
 The first row names each project's scope rather than carrying a support level,
-because it is the row the other twelve are read against.
+because it is the row the other fourteen are read against.
 
 Three rows are worth a note, since a label alone hides the reason:
 
@@ -92,6 +94,14 @@ Three rows are worth a note, since a label alone hides the reason:
   them is the same check. Hygiene reports deleted prose that is still
   retrievable; ctxlint repairs a broken path by looking for the rename; agnix
   documents no history use. A repository can use all three.
+- **Reference resolution.** Context files and configuration are where ctxlint
+  and agnix already read paths, so resolving a path is a natural extension of
+  what they do. Hygiene reads path-shaped text only where the path is the value
+  of a construct — a Markdown destination, a documented import, a permission
+  expression — and its limits are written into the rule rather than left to be
+  inferred: resolution is relative to the referring file, a basename elsewhere
+  in the tree does not satisfy a reference, and a reference that climbs above
+  the scanned root is not resolved and not reported.
 - **Determinism.** Hygiene's is enforced rather than asserted: the scan and the
   hooks cannot reach the network, and a test fails if that stops being true. The
   other two publish no determinism statement, which is a gap in the
@@ -106,10 +116,18 @@ Three rows are worth a note, since a label alone hides the reason:
   overlap is real but the question differs: they ask whether a config is valid
   and whether it matches the codebase, Hygiene asks whether the words in it are
   a record of a disagreement or a rule nobody can check.
-- **Stale references.** ctxlint's `paths` check and Hygiene's `HYG-PHA-001` both
-  catch a reference to something that is not there. ctxlint does it across
-  context files and MCP configs; Hygiene does it for a document cited from a
-  source comment.
+- **Stale references.** ctxlint's `paths` check and Hygiene's phantom-reference
+  rules both catch a reference to something that is not there. ctxlint does it
+  across the context files and MCP configs it reads; Hygiene does it in three
+  carriers — a citation in a source comment (`HYG-PHA-001`), and a
+  repository-local path written as a Markdown destination, a documented import
+  in an agent instruction file, or a permission expression in agent
+  configuration (`HYG-PHA-002`) — and separately reports a stored symbolic link
+  whose target does not resolve (`HYG-PHA-003`). How each resolves a reference
+  differs, and that is the part worth reading before relying on either:
+  Hygiene resolves from the directory of the file that carries the reference and
+  never outside the scanned root, so a same-named file elsewhere does not
+  satisfy it.
 - **Token cost.** ctxlint has `tokens` and `tier-tokens` checks. Hygiene reports
   comment volume (`HYG-VOL-001`) as a size signal and makes no token claim at
   all.

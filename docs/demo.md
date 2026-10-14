@@ -23,8 +23,8 @@ agent hygiene · /tmp/hygiene-demo
 
   argument residue   none
 
-  phantom authority   1 references — cited documents that do not exist
-    checkout.ts → OLD-DESIGN.md
+  phantom authority   1 references — citations, links and targets that do not resolve
+    checkout.ts:1 → OLD-DESIGN.md
 
   markdown   0 lines across 0 files
 
@@ -35,7 +35,9 @@ agent hygiene · /tmp/hygiene-demo
 
 One line produces two candidate findings: an instruction-like comment and a
 reference to a missing document. Counts across categories can overlap.
-The comment density is descriptive, not a pass/fail score.
+The comment density is descriptive, not a pass/fail score. The phantom line is
+shown with the line it was written on, so the citation can be found in the file
+rather than only in the structured report.
 
 Compare it with a mechanism comment:
 

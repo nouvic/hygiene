@@ -3,8 +3,8 @@
 **Find stale instructions hiding in your AI-assisted repo.**
 
 Hygiene is a free, local scanner for instruction-like source comments, records of
-past disagreements, references to missing documents, and growing repository prose.
-Optional Git hooks help keep new residue out of commits.
+past disagreements, references and links that do not resolve, and growing
+repository prose. Optional Git hooks help keep new residue out of commits.
 
 Bash and Git. No API key, model calls, telemetry, or package installation.
 
@@ -40,7 +40,8 @@ and what a scan gives you back.
 | A coding agent is getting sloppy | Instruction-shaped comments and prose that travel with the files a tool loads | Findings with a file and a line to review, or a clean report |
 | An agent ignores `CLAUDE.md` or `AGENTS.md` | Which instruction files a tool's own documentation says it loads, and what is stored in them | Stored findings sorted by loading surface, with a verdict per finding |
 | An agent repeats an approach the team already ruled out | Comments and prose recording a past disagreement (`HYG-ARG-001`, `HYG-ARG-002`) | The record, located, so it can be deleted or left to Git history |
-| An agent refers to architecture that was deleted | Source comments citing a document the tree does not contain (`HYG-PHA-001`) | The dangling citation, before anyone acts on it |
+| An agent refers to architecture that was deleted | Citations in comments (`HYG-PHA-001`), and repository-local paths in Markdown links, agent-file imports and agent configuration that the tree does not contain (`HYG-PHA-002`) | The dangling reference, with the file it is written in and the line, before anyone acts on it |
+| A file in the tree points at a path that is not there | Every symbolic link stored in the repository, tracked or untracked-but-unignored (`HYG-PHA-003`) | The link and the target it names. Nothing is read, followed, or repaired |
 | Repository context keeps growing | Markdown volume, and documents that only ever grow | The size, the accreting files, and what was deleted but stays retrievable |
 | Context bloat is raising token usage | How much comment and prose ship with the tree (`HYG-VOL-001`) | A count you can compare before and after a cleanup. No savings figure is claimed |
 | Repository instructions conflict | Directive-shaped statements across comments and prose | Each one, with its location. Matching is lexical, not a contradiction detector |
@@ -192,7 +193,7 @@ residue actually enters each agent's context and how much a cleanup removes.
 |---|---|
 | Governance in comments | Text resembling rules, rulings, or references to documents |
 | Argument residue | Text resembling records of past disagreements |
-| Phantom authority | Source comments referencing documents the scan cannot find |
+| Phantom authority | Citations, links, imports and symbolic links that name something this repository does not contain |
 | Comment and Markdown volume | A size signal, not a quality score |
 | Monotonic growth | Documents with at least three revisions and no net-shrinking revision |
 | Deleted documents | Prose still retrievable from Git history; not necessarily loaded by an agent |
@@ -260,7 +261,7 @@ prose, with a small Bash/Git scan-and-hook workflow.
 
 | Tool | Primary scope | Runtime |
 |---|---|---|
-| Hygiene | Instruction-like comments, repository prose, missing document references, and Git-history residue | Bash and Git |
+| Hygiene | Instruction-like comments, repository prose, unresolved references and links, and Git-history residue | Bash and Git |
 | agnix | Agent configuration, skills, and hook validation | See the agnix project |
 | ctxlint | Context-to-code consistency plus session and memory auditing | See the ctxlint project |
 

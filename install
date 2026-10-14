@@ -30,8 +30,9 @@ PREV="$(cat "$ROOT/.githooks/VERSION" 2>/dev/null || true)"
 
 mkdir -p "$ROOT/.githooks/lib"
 cp "$SRC/hooks/pre-commit" "$SRC/hooks/commit-msg" "$SRC/hooks/check-style" "$ROOT/.githooks/"
-cp "$SRC/lib/patterns.sh" "$SRC/lib/rules.sh" "$SRC/lib/findings.sh" \
-   "$SRC/lib/report.sh" "$ROOT/.githooks/lib/"
+cp "$SRC/lib/patterns.sh" "$SRC/lib/references.sh" "$SRC/lib/rules.sh" \
+   "$SRC/lib/findings.sh" "$SRC/lib/report.sh" \
+   "$SRC/lib/exposure-surfaces.tsv" "$ROOT/.githooks/lib/"
 cp "$SRC/bin/scan" "$ROOT/.githooks/scan"
 printf '%s\n' "$VERSION" > "$ROOT/.githooks/VERSION"
 chmod +x "$ROOT/.githooks/pre-commit" "$ROOT/.githooks/commit-msg" \

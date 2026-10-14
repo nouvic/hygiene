@@ -14,6 +14,8 @@ HYG_RULES='HYG-GOV-001
 HYG-ARG-001
 HYG-ARG-002
 HYG-PHA-001
+HYG-PHA-002
+HYG-PHA-003
 HYG-VOL-001
 HYG-HIS-001'
 
@@ -46,6 +48,8 @@ hyg_rule_title() {
     HYG-ARG-001) printf 'Argument residue in a source comment\n' ;;
     HYG-ARG-002) printf 'Argument residue in repository prose\n' ;;
     HYG-PHA-001) printf 'Reference to a document that does not exist\n' ;;
+    HYG-PHA-002) printf 'Reference to a repository path that does not resolve\n' ;;
+    HYG-PHA-003) printf 'Symbolic link whose target does not resolve\n' ;;
     HYG-VOL-001) printf 'Source file that is mostly comment\n' ;;
     HYG-HIS-001) printf 'Deleted prose still retrievable from Git history\n' ;;
     *) printf 'Unknown rule\n' ;;
@@ -59,6 +63,8 @@ hyg_rule_message() {
     HYG-ARG-001) printf 'A source comment records a past disagreement rather than describing the code.\n' ;;
     HYG-ARG-002) printf 'Repository prose records a past disagreement rather than describing the system.\n' ;;
     HYG-PHA-001) printf 'A source comment cites a document that this repository does not contain.\n' ;;
+    HYG-PHA-002) printf 'A document, an agent instruction file, or agent configuration references a repository path that does not resolve.\n' ;;
+    HYG-PHA-003) printf 'A symbolic link stored in this repository points at a target that does not resolve.\n' ;;
     HYG-VOL-001) printf 'A source file carries a high proportion of comment, which is a size signal and not a quality score.\n' ;;
     HYG-HIS-001) printf 'Prose that is no longer in the tree can still be retrieved from Git history.\n' ;;
     *) printf 'Unknown rule.\n' ;;
@@ -73,6 +79,8 @@ hyg_rule_name() {
     HYG-ARG-001) printf 'ArgumentResidueInSourceComment\n' ;;
     HYG-ARG-002) printf 'ArgumentResidueInRepositoryProse\n' ;;
     HYG-PHA-001) printf 'PhantomDocumentReference\n' ;;
+    HYG-PHA-002) printf 'UnresolvedRepositoryReference\n' ;;
+    HYG-PHA-003) printf 'BrokenRepositorySymlink\n' ;;
     HYG-VOL-001) printf 'CommentHeavySourceFile\n' ;;
     HYG-HIS-001) printf 'DeletedProseInGitHistory\n' ;;
     *) printf 'UnknownRule\n' ;;
@@ -104,6 +112,19 @@ hyg_rule_why() {
       'A citation implies a source exists. When the document is gone, moved, or' \
       'never written, the citation keeps pointing at authority that cannot be' \
       'consulted, and the claim behind it becomes unfalsifiable.' ;;
+    HYG-PHA-002) printf '%s\n' \
+      'A reference implies a target. A link, an import, or a configured path' \
+      'that no longer resolves sends a reader to nothing, and it keeps asserting' \
+      'that the thing it names is there. What this rule reports is a reference' \
+      'the repository is itself storing and cannot deliver, which is the one' \
+      'kind of broken reference a single checkout can demonstrate on its own.' \
+      'A path that points somewhere else on your machine is a different' \
+      'question, and this rule does not answer it.' ;;
+    HYG-PHA-003) printf '%s\n' \
+      'A link that does not resolve is a path the repository stores and cannot' \
+      'deliver. It reads as present in a listing and fails the moment anything' \
+      'opens it, and because it is checked in, every clone inherits the same' \
+      'failure.' ;;
     HYG-VOL-001) printf '%s\n' \
       'The proportion of a file that is comment is a size signal. A file that is' \
       'mostly explanation is carrying prose that has no other home, and prose' \
@@ -131,6 +152,37 @@ hyg_rule_limits() {
       'the same basename anywhere in the repository satisfies it, and a' \
       'reference to a section, an external URL, or a file outside the repository' \
       'is not modeled.' ;;
+    HYG-PHA-002) printf '%s\n' \
+      'Resolution follows the path as written, from the file that carries it, and' \
+      'a same-named file elsewhere in the repository does not satisfy it. Only' \
+      'the carriers the project models are read: Markdown link and image' \
+      'destinations, the local import syntax of the agent tools named in the' \
+      'exposure documentation, and path-bearing permission expressions in the' \
+      'project settings files those tools document. The import syntax is read' \
+      'narrowly, because an at-sign also opens an address, a handle and a package' \
+      'scope: the token has to start where an import starts, carry no second' \
+      'at-sign, and end in a file extension, so an extensionless import and one' \
+      'whose spaces are backslash-escaped are not read, and neither is anything' \
+      'after an at-sign in an address. A path written as an example,' \
+      'a placeholder or a template, an external URL, a fragment on its own, a' \
+      'glob, and a target outside the repository are not read at all. The' \
+      'fragment and heading of a link are not checked, only the file. The rule' \
+      'answers only for paths the scanned repository holds, so a reference' \
+      'outside it is outside the rule: an absolute path above the root, and a' \
+      'path written with a leading tilde, is not opened, not resolved and not' \
+      'reported. A tool may document exactly such a path for material it keeps' \
+      'with the machine rather than with any checkout, and an absent one is not' \
+      'distinguished from a present one, because neither is read. None of this' \
+      'establishes that the referenced material is needed.' ;;
+    HYG-PHA-003) printf '%s\n' \
+      'The test is whether the target resolves, and the target is never opened.' \
+      'A link that resolves outside the repository is reported as resolving; the' \
+      'check does not ask where it points or whether that is appropriate for' \
+      'this repository. The filesystem resolves the chain, so a loop and a chain' \
+      'both terminate, and a loop is reported as one more link that does not' \
+      'resolve. An ignored path is not an input, the contents of a linked' \
+      'directory are never walked, and where readlink is unavailable the link is' \
+      'still reported with an empty matched target.' ;;
     HYG-VOL-001) printf '%s\n' \
       'Volume is not quality. A dense, accurate comment block scores the same as' \
       'a dense, stale one. Thresholds are advisory and are shown with the' \
@@ -154,9 +206,23 @@ hyg_rule_remediation() {
       'place for it. If the outcome still matters, write it as a present-tense' \
       'reason about the system, or as a check.' ;;
     HYG-PHA-001) printf '%s\n' \
-      'Either restore the document, point the comment at the document that' \
-      'actually exists, or delete the citation and keep the part of the comment' \
-      'that explains the code.' ;;
+      'Delete the citation and keep the part of the comment that explains the' \
+      'code; that is the usual fix, because a citation to a document that is gone' \
+      'is usually a citation nothing depends on any more. If the citation is' \
+      'still valid, point it at the document that actually exists. Do not write' \
+      'a document only to clear the finding: the finding says the reference is' \
+      'stale, not that the material is wanted.' ;;
+    HYG-PHA-002) printf '%s\n' \
+      'Delete the reference if the thing it named is gone and nothing depends on' \
+      'it, which is the usual fix. If the reference is still meant to resolve,' \
+      'point it at the file that exists in this repository. Do not create a file' \
+      'only to clear the finding.' ;;
+    HYG-PHA-003) printf '%s\n' \
+      'Remove the link if its target is gone for good. If the link is still' \
+      'wanted, point it at a target that exists in this repository, or commit' \
+      'the real file in its place. Restoring the target on your own machine does' \
+      'not fix the finding, because every other clone is still broken. Nothing' \
+      'is deleted or rewritten for you.' ;;
     HYG-VOL-001) printf '%s\n' \
       'Read the file and decide which comments are load-bearing. Explanation that' \
       'belongs in a document should move there; explanation that is really a rule' \

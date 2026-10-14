@@ -56,6 +56,8 @@ table checkable.
 | HYG-ARG-001 |  |  |
 | HYG-ARG-002 |  |  |
 | HYG-PHA-001 |  |  |
+| HYG-PHA-002 |  |  |
+| HYG-PHA-003 |  |  |
 | HYG-VOL-001 |  |  |
 | HYG-HIS-001 |  |  |
 

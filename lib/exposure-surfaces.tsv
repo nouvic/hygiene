@@ -16,20 +16,24 @@
 #   cursor-rule           the file's own frontmatter decides
 #   copilot-instruction   the file's own frontmatter decides
 #
-# imports marks a file the documentation gives an import syntax. A family that
-# decides for itself leaves surface and reason empty, written here as -.
+# imports marks a file the documentation gives an import syntax. The syntax
+# belongs to the file's own format rather than to one directory, so a nested row
+# carries it wherever the row naming the same file at the root does; the import
+# closure and the reference scan both read this column rather than restating it.
+# A family that decides for itself leaves surface and reason empty, written here
+# as -.
 # Every reason is a statement about a path, never about a running agent.
 #
 # tool	pattern	family	surface	reason	param	imports
 claude-code	CLAUDE.md	plain	automatic	project instructions: read at launch, from the working directory upward	-	yes
 claude-code	.claude/CLAUDE.md	plain	automatic	project instructions: read at launch, from the working directory upward	-	yes
 claude-code	CLAUDE.local.md	plain	automatic	local instructions: read at launch, after the project file at the same level	-	yes
-claude-code	*/CLAUDE.md	plain	configured	nested instructions: read when work reaches this directory	-	-
-claude-code	*/.claude/CLAUDE.md	plain	configured	nested instructions: read when work reaches this directory	-	-
-claude-code	*/CLAUDE.local.md	plain	configured	nested local instructions: read when work reaches this directory	-	-
+claude-code	*/CLAUDE.md	plain	configured	nested instructions: read when work reaches this directory	-	yes
+claude-code	*/.claude/CLAUDE.md	plain	configured	nested instructions: read when work reaches this directory	-	yes
+claude-code	*/CLAUDE.local.md	plain	configured	nested local instructions: read when work reaches this directory	-	yes
 claude-code	.claude/rules/*|*/.claude/rules/*	claude-rule	-	-	-	-
 claude-code	AGENTS.md|.claude/AGENTS.md	agents-file	automatic	project instructions when no project file applies; one above the repository would displace it	CLAUDE.md|.claude/CLAUDE.md|CLAUDE.local.md	yes
-claude-code	*/AGENTS.md|*/.claude/AGENTS.md	agents-file	configured	read when work reaches this directory, and only where no project file applies	CLAUDE.md|.claude/CLAUDE.md|CLAUDE.local.md	-
+claude-code	*/AGENTS.md|*/.claude/AGENTS.md	agents-file	configured	read when work reaches this directory, and only where no project file applies	CLAUDE.md|.claude/CLAUDE.md|CLAUDE.local.md	yes
 cursor	.cursor/rules/*.mdc	cursor-rule	-	-	-	-
 cursor	.cursor/rules/*	plain	unknown	the rules reference documents the .mdc extension as the project rule format, so a plain markdown file here is ignored	-	-
 cursor	.cursorrules|*/.cursorrules	plain	unknown	the current Cursor rules reference does not mention this file, so whether it is still read is undocumented here	-	-
